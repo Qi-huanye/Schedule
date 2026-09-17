@@ -1,46 +1,22 @@
-# Android Environment
+# 开发环境
 
-Verified on 2026-09-16 (Arch Linux, x86_64).
+- JDK 17
+- Android SDK Platform 36、Build-Tools 36.0.0、Platform-Tools
+- 仓库自带 Gradle 8.13 Wrapper
+- Android Studio 可选；真机或 Android 36 模拟器用于设备测试
 
-## Installed
-
-- JDK 17.0.20.1: `/usr/lib/jvm/java-17-openjdk`
-- Android Studio: `~/.local/opt/android-studio`, command `android-studio`
-- SDK: `~/Android/Sdk`
-- Command-line tools 22.0
-- SDK Platforms 35 and 36; the Studio wizard also installed 37.0
-- Build-Tools 35.0.0 and 36.0.0
-- Platform-Tools 37.0.1
-- Emulator 37.1.11, KVM acceleration usable
-- Android 36 AOSP x86_64 system image, revision 2
-- AVD: `WakeUpPure_API_36`
-- System USB rules: `android-udev`
-
-Java and Android paths are configured in `~/.zshrc`. Open a new terminal
-to use them. No additional global Gradle installation is required: the app
-will use a project-specific Gradle Wrapper. An existing cached Gradle 8.3
-distribution was verified to run on JDK 17, but is not a selected app build version.
-
-## Verification
-
-- SDK package inventory: no duplicate-location or corrupted-package warnings.
-- Emulator boot: `sys.boot_completed=1`.
-- Temporary Java test APK compiled with SDK 36, dexed, aligned and signed.
-- APK signature verification passed (v2 and v3).
-- ADB installation succeeded.
-- Activity launch returned `Status: ok`; activity was resumed.
-- UI Automator confirmed the text `Android environment verified` on screen.
-
-The temporary test files are in `~/.cache/wakeup-setup/smoke`.
-This verifies the native Android toolchain, not a Kotlin/Compose Gradle app
-build. App dependencies and the project-specific build remain development work.
-
-## Start the Test Device
+将 SDK 路径写入本机 `local.properties` 的 `sdk.dir`，或设置 `ANDROID_HOME`。
+`local.properties`、构建产物和签名文件不进入 Git。
 
 ```sh
-emulator -avd WakeUpPure_API_36 -gpu swiftshader_indirect
+./gradlew test assembleDebug lintDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Duplicate and incomplete SDK directories were moved to
-`~/.cache/wakeup-setup/sdk-backups` instead of deleted.
-Official downloaded archives are cached in `~/.cache/wakeup-setup`.
+设备测试会创建并清理测试课表，请仅在专用模拟器运行：
+
+```sh
+ANDROID_SERIAL=emulator-5554 ./gradlew connectedDebugAndroidTest
+```
+
+签名与 GitHub Release 配置见 [发布维护](docs/RELEASING.md)。

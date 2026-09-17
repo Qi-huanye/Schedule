@@ -12,7 +12,8 @@ data class Schedule(
     val maxWeeks: Int = 20, val current: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(), val updatedAt: Long = System.currentTimeMillis(),
     val showWeekend: Boolean = true, val firstDay: Int = 1,
-    val reminderMinutes: Int? = null
+    val reminderMinutes: Int? = null,
+    val fixedLessonMinutes: Int? = null, val colorPalette: String = "custom"
 )
 
 @Serializable

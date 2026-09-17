@@ -47,5 +47,21 @@ work and disclose that Android battery management may delay delivery.
 ## Compatibility Evidence
 
 Format fixtures from documented schemas prove parsing only, not round-trip
-acceptance by every official WakeUp version. No live modern token import has
-been verified. README must distinguish tested fixtures from external compatibility.
+acceptance by every official WakeUp version. Live handshake and device rejection handling have been verified; successful
+modern token retrieval/decryption has not. README must distinguish tested fixtures from external compatibility.
+
+## Additional protocol evidence (2026-09-17)
+
+The upstream WakeUpDecoder repository also contains a public 6.1.70 reference
+APK. It was downloaded to an external research cache, never this repository.
+Its embedded public metadata yields versionCode 450 (not 6170, which is only
+a synthetic test-vector input). The Python reference completed a live
+antispam handshake and received HTTP 200 / errNo 410004 (命中反作弊) from getv2
+for a synthetic probe. These results justify a bundled overridable
+profile; they do not prove successful live schedule decryption. See
+PROTOCOL_PROFILE_PLAN.md for the source APK fingerprint.
+
+The upstream README requires an identity previously registered with WakeUp.
+Normal ANDROID_ID access in a differently signed app does not provide that
+identity on Android 8+. A verified registration/compatibility mechanism is
+still missing. No zero-ID fallback or private identity extraction is used.

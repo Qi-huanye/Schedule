@@ -1,4 +1,4 @@
-# WakeUpPure Architecture
+# Schedule Architecture
 
 Local-first Android application, minSdk 26, Kotlin, Compose Material 3,
 Navigation Compose, Room, Coroutines/StateFlow, serialization, OkHttp,
@@ -52,8 +52,7 @@ or phone identifiers permissions. Network occurs only after explicit token impor
 ## Delivery and validation
 
 Research -> buildable scaffold -> Room/domain -> timetable CRUD -> offline import
--> isolated modern protocol -> exports -> today/reminders/widgets. Continuous
-build/test checkpoints do not require user approval. Unit tests cover academic
+-> isolated modern protocol -> exports -> today/reminders/widgets. Database v2 explicitly migrates v1 schedules without destructive reset. Unit tests cover academic
 week boundaries, odd/even periods, Sunday/year rollover, conflict lanes,
 external fixtures, crypto vectors and export escaping. Instrumented tests cover
 Room transactions. Final emulator checks verify editing, persistence and files.

@@ -1,9 +1,19 @@
 pluginManagement {
-    repositories { google(); mavenCentral(); gradlePluginPortal() }
+    repositories {
+        maven("https://edgedl.me.gvt1.com/dl/android/maven2/") {
+            content { includeGroupByRegex("com\\.android.*"); includeGroupByRegex("androidx\\..*"); includeGroupByRegex("com\\.google\\.testing.*") }
+        }
+        google(); mavenCentral(); gradlePluginPortal()
+    }
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories { google(); mavenCentral() }
+    repositories {
+        maven("https://edgedl.me.gvt1.com/dl/android/maven2/") {
+            content { includeGroupByRegex("com\\.android.*"); includeGroupByRegex("androidx\\..*"); includeGroupByRegex("com\\.google\\.testing.*") }
+        }
+        google(); mavenCentral()
+    }
 }
-rootProject.name = "WakeUpPure"
+rootProject.name = "Schedule"
 include(":app")

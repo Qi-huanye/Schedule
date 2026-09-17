@@ -1,8 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <application android:name=".PureApp" android:label="WakeUpPure"
-        android:allowBackup="false" android:supportsRtl="true"
+    <application android:name=".PureApp" android:label="Schedule" android:icon="@drawable/ic_launcher"
+        android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true"
         android:theme="@style/AppTheme" android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
@@ -10,5 +10,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <receiver android:name=".widget.TodayWidget" android:label="今日课程" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/today_widget" />
+        </receiver>
+        <receiver android:name=".widget.NextWidget" android:label="下一节课" android:exported="false">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/next_widget" />
+        </receiver>
     </application>
 </manifest>

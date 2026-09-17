@@ -1,0 +1,9 @@
+WakeUp protocol implementation
+Adapted from airline233/WakeUpDecoder
+https://github.com/airline233/WakeUpDecoder
+Licensed under Apache License 2.0; see decoder-LICENSE.txt.
+Modified: translated Python protocol algorithms to Kotlin; added strict input
+validation, injectable Android identity and HTTP transport, and response limits.
+No official WakeUp APK, private signing key, user token or real device ID is
+bundled. Public client protocol constants are documented in WAKEUP_PROTOCOL.md.
+This independent project is not affiliated with or endorsed by WakeUp.
