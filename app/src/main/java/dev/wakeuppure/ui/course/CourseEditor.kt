@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.domain.usecase.FixedLessonTime
 import dev.wakeuppure.domain.usecase.TimeSlotPlanner
+import dev.wakeuppure.ui.background.LocalCourseColors
+import dev.wakeuppure.ui.background.backgroundScreenColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,7 +31,7 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
     var slots by remember { mutableStateOf(data.timeSlots.sortedBy { it.section }) }
     var editingPeriod by remember { mutableStateOf<Int?>(null) }
     var invalid by remember { mutableStateOf(false) }
-    Scaffold(topBar = { TopAppBar(title = { Text(if (initial == null) "添加课程" else "编辑课程") }, navigationIcon = {
+    Scaffold(containerColor = backgroundScreenColor(), topBar = { TopAppBar(title = { Text(if (initial == null) "添加课程" else "编辑课程") }, navigationIcon = {
         IconButton(onClick = onClose) { Icon(Icons.Default.Close, "关闭") }
     }, actions = { IconButton(enabled = !busy, onClick = {
         invalid = course.name.isBlank() || periods.any { it.startWeek > it.endWeek || it.startSection > it.endSection }
@@ -50,6 +52,8 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
                     }
                 }
             }
+            if (LocalCourseColors.current != null) Text("当前课程跟随背景配色。关闭该选项后，将显示这里保存的颜色。",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("上课时段", style = MaterialTheme.typography.titleMedium)
             periods.forEachIndexed { index, period ->
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

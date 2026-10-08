@@ -1,5 +1,8 @@
 package dev.wakeuppure.ui.settings
 
+import dev.wakeuppure.ui.background.backgroundScreenColor
+import dev.wakeuppure.ui.background.LocalCourseColors
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
@@ -80,7 +83,7 @@ fun ScheduleEditor(initial: ScheduleData?, busy: Boolean, onClose: () -> Unit,
         }
         if (error == null) onSave(schedule.copy(fixedLessonMinutes = if (fixedDuration) durationText.toIntOrNull() else null, semesterStartDate = date, maxWeeks = effectiveWeeks, updatedAt = System.currentTimeMillis()), slots.toList(), preserveDates, weekOffset)
     }
-    Scaffold(topBar = { TopAppBar(title = { Text(if (initial == null) "新建课表" else "课表设置") }, navigationIcon = {
+    Scaffold(containerColor = backgroundScreenColor(), topBar = { TopAppBar(title = { Text(if (initial == null) "新建课表" else "课表设置") }, navigationIcon = {
         IconButton(onClick = onClose) { Icon(Icons.Default.Close, "关闭") }
     }) }, bottomBar = {
         Surface(shadowElevation = 4.dp) {
@@ -136,7 +139,9 @@ fun ScheduleEditor(initial: ScheduleData?, busy: Boolean, onClose: () -> Unit,
                 Row(verticalAlignment = Alignment.CenterVertically) { Text("显示周末", Modifier.weight(1f)); Switch(schedule.showWeekend, { schedule = schedule.copy(showWeekend = it) }) }
                 Choice("每周第一天", schedule.firstDay, listOf(1, 7), { if (it == 1) "周一" else "周日" }) { schedule = schedule.copy(firstDay = it) }
             }
-            SettingsGroup("课程配色", "选择方案后，保存时统一更新当前课表的课程颜色。") {
+            SettingsGroup("课程配色", if (LocalCourseColors.current != null)
+                "当前课程跟随背景配色；这里保存的颜色会在关闭该选项后显示。"
+                else "选择方案后，保存时统一更新当前课表的课程颜色。") {
                 OutlinedCard(onClick = { schedule = schedule.copy(colorPalette = "custom") }, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = schedule.colorPalette == "custom", onClick = { schedule = schedule.copy(colorPalette = "custom") })

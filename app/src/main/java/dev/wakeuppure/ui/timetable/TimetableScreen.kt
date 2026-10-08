@@ -14,14 +14,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.domain.usecase.*
+import dev.wakeuppure.ui.background.*
 import java.time.*
 import java.time.format.DateTimeFormatter
 
@@ -38,7 +37,7 @@ fun TimetableScreen(data: ScheduleData, now: LocalDateTime, onDetail: (CourseWit
     val allDays = (0..6).map { (data.schedule.firstDay - 1 + it) % 7 + 1 }
     val days = allDays.filter { data.schedule.showWeekend || it <= 5 }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().background(backgroundPanelColor()).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { scope.launch { pager.animateScrollToPage(pager.currentPage - 1) } }, enabled = week > 1) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "上一周") }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(if (week == current) "第 $week 周" else "第 $week 周 · 非本周", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -50,7 +49,7 @@ fun TimetableScreen(data: ScheduleData, now: LocalDateTime, onDetail: (CourseWit
             IconButton(onClick = { scope.launch { pager.animateScrollToPage(current.coerceIn(1, data.schedule.maxWeeks) - 1) } }) { Icon(Icons.Default.Today, "回到本周") }
         }
         if (current < 1 || current > data.schedule.maxWeeks) Text(if (current < 1) "尚未开学" else "本学期已结束",
-            Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp), color = MaterialTheme.colorScheme.secondary)
+            Modifier.align(Alignment.CenterHorizontally).background(backgroundPanelColor()).padding(bottom = 8.dp), color = MaterialTheme.colorScheme.secondary)
         HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f), beyondViewportPageCount = 1) { page ->
             TimetableWeek(data, now, page + 1, days, onDetail, onEdit)
         }
@@ -65,7 +64,7 @@ private fun TimetableWeek(data: ScheduleData, now: LocalDateTime, week: Int, day
     val ghosts = TimetableGhosts.select(data.courses, week)
     val lanes = CourseFilter.lanes(visible.map { it.second })
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(end = 6.dp)) {
+        Row(Modifier.fillMaxWidth().background(backgroundPanelColor()).padding(end = 6.dp)) {
             Spacer(Modifier.width(42.dp))
             days.forEach { day ->
                 val date = WeekCalculator.date(data.schedule.semesterStartDate, week, day)
@@ -82,7 +81,7 @@ private fun TimetableWeek(data: ScheduleData, now: LocalDateTime, week: Int, day
         val height = 68.dp
         Row(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
             .padding(bottom = 80.dp, end = 6.dp)) {
-            Column(Modifier.width(42.dp)) { slots.forEach { slot ->
+            Column(Modifier.width(42.dp).background(backgroundPanelColor())) { slots.forEach { slot ->
                 Column(Modifier.height(height).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(slot.section.toString(), fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold)
                     Text(slot.startTime, fontSize = 9.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -95,15 +94,15 @@ private fun TimetableWeek(data: ScheduleData, now: LocalDateTime, week: Int, day
                         val ghost = !CourseFilter.matches(period, week)
                         val (lane, total) = if (ghost) 0 to 1 else lanes.getValue(period.id)
                         val width = maxWidth / total
-                        val base = runCatching { Color(android.graphics.Color.parseColor(course.course.color)) }.getOrDefault(Color(0xFFC1E8DE))
-                        val ink = if (ghost) MaterialTheme.colorScheme.onSurfaceVariant else if (base.luminance() < 0.35f) Color.White else Color(0xFF142925)
+                        val (base, courseInk) = courseDisplayColors(course.course.id, course.course.color)
+                        val ink = if (ghost) MaterialTheme.colorScheme.onSurfaceVariant else courseInk
                         val dayDate = WeekCalculator.date(data.schedule.semesterStartDate, week, day)
                         val occurrence = CourseFilter.onDate(data, dayDate).find { it.period.id == period.id }
                         val active = !ghost && occurrence != null && !now.isBefore(occurrence.start) && now.isBefore(occurrence.end)
                         val idx = slots.indexOfFirst { it.section == period.startSection }.coerceAtLeast(0)
                         Box(Modifier.offset(x = width * lane, y = height * idx).width(width)
                             .height(height * (period.endSection - period.startSection + 1)).padding(2.dp)
-                            .background(if (ghost) MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.45f) else base, RoundedCornerShape(5.dp))
+                            .background(if (ghost) MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = if (LocalBackgroundActive.current) 0.94f else 0.45f) else base, RoundedCornerShape(5.dp))
                             .then(if (active) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(5.dp)) else Modifier)
                             .combinedClickable(onClick = { onDetail(course) }, onLongClick = { onEdit(course) }).padding(4.dp)) {
                             Column {

@@ -1,5 +1,7 @@
 package dev.wakeuppure.ui.settings
 
+import dev.wakeuppure.ui.background.backgroundScreenColor
+
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -64,7 +66,7 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
             localStatus = "文件已导出"
         } catch (_: Exception) { localStatus = "导出失败，请检查文件位置" } }
     }
-    Scaffold(topBar = { TopAppBar(title = { Text("导入 / 导出") }, navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { inset ->
+    Scaffold(containerColor = backgroundScreenColor(), topBar = { TopAppBar(title = { Text("导入 / 导出") }, navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { inset ->
         Column(Modifier.padding(inset).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("导入课表 · WakeUp", style = MaterialTheme.typography.titleLarge)
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {

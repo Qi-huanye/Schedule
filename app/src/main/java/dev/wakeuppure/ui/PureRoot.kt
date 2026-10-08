@@ -1,21 +1,27 @@
 package dev.wakeuppure.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.*
 import dev.wakeuppure.domain.model.*
+import dev.wakeuppure.ui.background.*
 import dev.wakeuppure.ui.course.*
 import dev.wakeuppure.ui.settings.*
 import dev.wakeuppure.ui.timetable.TimetableScreen
@@ -26,13 +32,17 @@ import java.time.LocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = viewModel()) {
+fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = viewModel(), backgrounds: BackgroundViewModel = viewModel()) {
     val all by vm.schedules.collectAsState()
     val data = all.firstOrNull { it.schedule.current } ?: all.firstOrNull()
     val appearance by vm.appearance.collectAsState()
     val error by vm.error.collectAsState()
     val busy by vm.busy.collectAsState()
     val updateState by updates.state.collectAsStateWithLifecycle()
+    val backgroundState by backgrounds.state.collectAsStateWithLifecycle()
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(backgrounds::importImage)
+    }
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) { while (true) { now = LocalDateTime.now(); delay(30_000) } }
     var editCourse by remember { mutableStateOf<CourseWithPeriods?>(null) }
@@ -44,9 +54,9 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = view
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: "timetable"
-    PureTheme(appearance) {
-        Surface(Modifier.fillMaxSize()) {
-            Scaffold(topBar = {
+    PureTheme(appearance, backgroundState) {
+        Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) {
+            Scaffold(containerColor = Color.Transparent, topBar = {
                 if (route in listOf("timetable", "today", "mine")) TopAppBar(title = {
                     Column(Modifier.clickable { scheduleMenu = true }) {
                         Text(data?.schedule?.name ?: "Schedule", style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -56,9 +66,10 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = view
                             DropdownMenuItem(text = { Text("新建课表") }, onClick = { editSchedule = null; scheduleMenu = false; nav.navigate("schedule") })
                         }
                     }
-                }, actions = { IconButton(onClick = { editSchedule = data; nav.navigate("schedule") }) { Icon(Icons.Default.Settings, "课表设置") } })
+                }, actions = { IconButton(onClick = { editSchedule = data; nav.navigate("schedule") }) { Icon(Icons.Default.Settings, "课表设置") } },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = backgroundPanelColor(MaterialTheme.colorScheme.surface)))
             }, bottomBar = {
-                if (route in listOf("timetable", "today", "mine")) NavigationBar {
+                if (route in listOf("timetable", "today", "mine")) NavigationBar(containerColor = backgroundPanelColor(MaterialTheme.colorScheme.surfaceContainer)) {
                     listOf(Triple("timetable", "课表", Icons.Default.CalendarMonth), Triple("today", "今日", Icons.Default.Today), Triple("mine", "我的", Icons.Default.PersonOutline)).forEach { (id, label, icon) ->
                         NavigationBarItem(selected = route == id, onClick = { nav.navigate(id) { popUpTo("timetable"); launchSingleTop = true } }, icon = { Icon(icon, label) }, label = { Text(label) })
                     }
@@ -73,7 +84,9 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = view
                     }
                     composable("today") { if (data == null) EmptySchedule { nav.navigate("schedule") } else TodayScreen(data, now) { detail = it } }
                     composable("mine") {
-                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                            .padding(if (LocalBackgroundActive.current) 12.dp else 0.dp)
+                            .background(backgroundPanelColor(), RoundedCornerShape(20.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("我的课表", style = MaterialTheme.typography.titleLarge)
                             all.forEach { item ->
                                 ListItem(headlineContent = { Text(item.schedule.name) }, supportingContent = { Text("${item.courses.size} 门课程 · ${item.schedule.maxWeeks} 周") },
@@ -91,6 +104,9 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = view
                                     SegmentedButton(selected = appearance == value, onClick = { vm.setAppearance(value) }, shape = SegmentedButtonDefaults.itemShape(i, 3)) { Text(label) }
                                 }
                             }
+                            BackgroundSettingsSection(backgroundState, { imagePicker.launch(arrayOf("image/*")) },
+                                backgrounds::clearBackground, backgrounds::setImageTheme, backgrounds::setCourseTheme)
+                            HorizontalDivider()
                             Button(onClick = { nav.navigate("transfer") }, modifier = Modifier.fillMaxWidth()) { Text("导入 / 导出 / 数据备份") }
                             data?.let { ReminderSettings(vm, it) }
                             HorizontalDivider()
@@ -123,7 +139,7 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = view
 
 @Composable
 private fun EmptySchedule(create: () -> Unit) {
-    Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    Column(Modifier.fillMaxSize().background(backgroundPanelColor()).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Icon(Icons.Default.CalendarMonth, null, Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(16.dp))
         Text("还没有课表", style = MaterialTheme.typography.titleLarge)

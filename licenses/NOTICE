@@ -7,3 +7,20 @@ validation, injectable Android identity and HTTP transport, and response limits.
 No official WakeUp APK, private signing key, user token or real device ID is
 bundled. Public client protocol constants are documented in WAKEUP_PROTOCOL.md.
 This independent project is not affiliated with or endorsed by WakeUp.
+
+Image-derived theme and course colors
+MaterialKolor material-color-utilities 2.0.2 (Kotlin port)
+https://github.com/jordond/MaterialKolor
+Copyright (c) 2023 Jordon de Hoog
+Licensed under MIT License; see materialkolor-LICENSE.txt.
+Based on Material Color Utilities
+https://github.com/material-foundation/material-color-utilities
+Copyright 2021 Google LLC
+Upstream algorithms licensed under Apache License 2.0; see the project LICENSE.
+Uses Celebi quantization, Score, HCT, Tonal Spot and Material dynamic color roles.
+
+Image orientation metadata
+AndroidX ExifInterface 1.4.1
+https://developer.android.com/jetpack/androidx/releases/exifinterface
+Copyright The Android Open Source Project
+Licensed under Apache License 2.0; see the project LICENSE.
