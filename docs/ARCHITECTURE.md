@@ -2,7 +2,9 @@
 
 Local-first Android application, minSdk 26, Kotlin, Compose Material 3,
 Navigation Compose, Room, Coroutines/StateFlow, serialization, OkHttp,
-WorkManager. No accounts, analytics, advertisements or startup requests.
+WorkManager. No accounts, analytics or advertisements. Optional automatic update
+checks default to enabled and request public GitHub release metadata on foreground,
+at most once per 24 hours, without schedule data or device identifiers.
 
 ## Directory design
 
@@ -10,6 +12,7 @@ WorkManager. No accounts, analytics, advertisements or startup requests.
 app/src/main/java/dev/wakeuppure/
   data/local/              Room entities, DAO, database
   data/repository/         transaction and Flow-backed repositories
+  data/update/             stable GitHub release discovery and version comparison
   data/wakeup/json/        external DTO parsing and mapping
   data/wakeup/legacy/      legacy envelope handling
   data/wakeup/token/       profile, identity, request/response protocol
@@ -21,6 +24,7 @@ app/src/main/java/dev/wakeuppure/
   ui/course/             multi-period course editor
   ui/today/              chronological occurrences
   ui/settings/           schedules, slots, appearance, import/export
+  ui/update/             persisted check policy, lifecycle checks and update prompts
   notification/          opt-in notifications
   widget/                today and next-course widgets
 app/src/test/             deterministic domain/parser/crypto tests
@@ -47,7 +51,11 @@ navigation, per-course colors, readable details, tap/long-press editing.
 Course conflicts occupy separate lanes and retain detail access. Dark/system/
 light appearance; schedule-local weekend, first-day and reminder settings.
 Use SAF for file import/export and Android Sharesheet for text. No storage
-or phone identifiers permissions. Network occurs only after explicit token import.
+or phone identifiers permissions. Network is used for explicit token import and
+GitHub update checks. My → About provides manual checks and an automatic-check switch.
+Users can dismiss a prompt or persistently skip one version; manual checks override
+the skipped version and time limit. Coroutine cancellation cancels the HTTP call.
+Downloads open the canonical GitHub release page; the app does not install updates.
 
 ## Delivery and validation
 

@@ -13,23 +13,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.*
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.ui.course.*
 import dev.wakeuppure.ui.settings.*
 import dev.wakeuppure.ui.timetable.TimetableScreen
 import dev.wakeuppure.ui.today.TodayScreen
+import dev.wakeuppure.ui.update.*
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PureRoot(vm: PureViewModel = viewModel()) {
+fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = viewModel()) {
     val all by vm.schedules.collectAsState()
     val data = all.firstOrNull { it.schedule.current } ?: all.firstOrNull()
     val appearance by vm.appearance.collectAsState()
     val error by vm.error.collectAsState()
     val busy by vm.busy.collectAsState()
+    val updateState by updates.state.collectAsStateWithLifecycle()
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) { while (true) { now = LocalDateTime.now(); delay(30_000) } }
     var editCourse by remember { mutableStateOf<CourseWithPeriods?>(null) }
@@ -92,7 +95,8 @@ fun PureRoot(vm: PureViewModel = viewModel()) {
                             data?.let { ReminderSettings(vm, it) }
                             HorizontalDivider()
                             Text("关于 Schedule", style = MaterialTheme.typography.titleMedium)
-                            Text("0.2.0 · 开源课程表\n无广告 · 无账号 · 无追踪\n课表保存在本机。仅主动使用分享口令导入时访问网络。", style = MaterialTheme.typography.bodyMedium)
+                            AppUpdateSettings(updateState, updates::setAutoCheckEnabled) { updates.checkForUpdates(manual = true) }
+                            Text("开源课程表 · 无广告 · 无账号 · 无追踪\n课表保存在本机。检查更新时连接 GitHub，分享口令导入时访问对应服务。", style = MaterialTheme.typography.bodyMedium)
                             Text("协议算法参考 WakeUpDecoder（Apache-2.0）。架构与格式研究参考 Sleepy；更多信息见项目 README。", style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -112,6 +116,7 @@ fun PureRoot(vm: PureViewModel = viewModel()) {
             deleteCourse?.let { item -> AlertDialog(onDismissRequest = { deleteCourse = null }, title = { Text("删除 ${item.course.name}？") }, text = { Text("这门课程的全部上课时段将被删除。") }, confirmButton = { TextButton(onClick = { vm.deleteCourse(item.course.id); deleteCourse = null }) { Text("删除") } }, dismissButton = { TextButton(onClick = { deleteCourse = null }) { Text("取消") } }) }
             deleteSchedule?.let { item -> AlertDialog(onDismissRequest = { deleteSchedule = null }, title = { Text("删除 ${item.schedule.name}？") }, text = { Text("该课表及其所有课程将被删除。") }, confirmButton = { TextButton(onClick = { vm.deleteSchedule(item.schedule.id); deleteSchedule = null }) { Text("删除") } }, dismissButton = { TextButton(onClick = { deleteSchedule = null }) { Text("取消") } }) }
             error?.let { AlertDialog(onDismissRequest = { vm.error.value = null }, title = { Text("操作未完成") }, text = { Text(it) }, confirmButton = { TextButton(onClick = { vm.error.value = null }) { Text("知道了") } }) }
+            AppUpdateHost(updates)
         }
     }
 }

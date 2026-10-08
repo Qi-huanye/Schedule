@@ -2,7 +2,7 @@
 
 ## 自动发布
 
-1. 修改 `app/build.gradle.kts` 的 `versionCode`、`versionName`，同步更新关于页与发布说明。
+1. 修改 `app/build.gradle.kts` 的 `versionCode`、`versionName`，更新发布说明。关于页自动读取构建版本。
 2. 更新 `docs/RELEASE_NOTES.md`，提交到 `main`，等待 Android CI 通过。
 3. 创建与 `versionName` 一致的标签（例如 `v0.2.0`），推送标签。
 4. `Publish Android release` 工作流执行测试、Lint、签名构建、签名校验，发布 APK 与 SHA-256 文件。
@@ -32,3 +32,16 @@ scripts/package-release.sh
 产物位于被 Git 忽略的 `release/`。没有签名环境变量时，普通 `assembleRelease` 仅用于未签名构建，不可作为可安装发布包。
 
 GitHub 默认源码 ZIP 不包含 APK；安装包位于 Release 的 Assets。
+
+## 应用内更新提示
+
+App 查询本仓库的 GitHub `releases/latest` API。自动提示要求正式发布、版本号
+高于已安装版本，并至少存在一个状态为 uploaded、大小大于零的 APK 资产。
+标签使用 `v主版本.次版本.修订版本`，例如 `v0.3.0`；数字逐段比较，构建元数据不影响排序。
+草稿、预发布版、无法识别的标签及没有 APK 的发布不会触发提示。
+
+开启自动检查后，应用进入前台时每 24 小时最多检查一次，网络失败不会弹窗。
+“我的”中的手动检查绕过检查间隔和“跳过此版本”；关闭自动检查后仍可手动检查。
+提示会打开对应的 GitHub Release 页面，不会自动下载或安装 APK。
+
+首次支持更新检查的 APK 仍需用户手动安装，之前的版本无法凭空获得此功能。

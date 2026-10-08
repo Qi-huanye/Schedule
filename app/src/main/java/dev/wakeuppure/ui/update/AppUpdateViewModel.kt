@@ -1,0 +1,90 @@
+package dev.wakeuppure.ui.update
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import dev.wakeuppure.BuildConfig
+import dev.wakeuppure.data.update.AppRelease
+import dev.wakeuppure.data.update.AppReleaseRepository
+import dev.wakeuppure.data.update.ReleaseSource
+import dev.wakeuppure.data.update.isNewerVersion
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+data class AppUpdateState(
+    val autoCheckEnabled: Boolean = true,
+    val checking: Boolean = false,
+    val release: AppRelease? = null,
+    val message: String? = null,
+)
+
+class AppUpdateViewModel(
+    application: Application,
+    private val source: ReleaseSource,
+    private val now: () -> Long,
+    private val currentVersion: String,
+) : AndroidViewModel(application) {
+    constructor(application: Application) : this(application, AppReleaseRepository(), System::currentTimeMillis, BuildConfig.VERSION_NAME)
+
+    private val preferences = application.getSharedPreferences("app_updates", 0)
+    private val mutableState = MutableStateFlow(AppUpdateState(autoCheckEnabled = preferences.getBoolean("automatic", true)))
+    val state = mutableState.asStateFlow()
+    private var checkJob: Job? = null
+    private var automaticRequest = false
+
+    fun checkForUpdates(manual: Boolean = false) {
+        if (state.value.checking) return
+        val timestamp = now()
+        val elapsed = timestamp - preferences.getLong("last_attempt", 0)
+        if (!manual && (!state.value.autoCheckEnabled ||
+                (preferences.contains("last_attempt") && elapsed in 0 until CHECK_INTERVAL_MS))) return
+        preferences.edit().putLong("last_attempt", timestamp).apply()
+        automaticRequest = !manual
+        mutableState.update { it.copy(checking = true, message = null) }
+        checkJob = viewModelScope.launch {
+            try {
+                val release = source.latest()
+                val newer = release != null && isNewerVersion(release.version, currentVersion)
+                val skipped = release?.version?.substringBefore('+') == preferences.getString("skipped_version", null)
+                mutableState.update { state ->
+                    state.copy(
+                        release = release.takeIf { newer && (manual || (!skipped && state.autoCheckEnabled)) },
+                        message = if (!manual || newer) null else if (release == null)
+                            "暂未找到可用的正式版本" else "已是最新版本",
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                if (manual) mutableState.update { it.copy(message = "检查更新失败，请检查网络后重试。") }
+            }
+        }.also { job ->
+            // Also runs if the job is cancelled before its body starts.
+            job.invokeOnCompletion { mutableState.update { it.copy(checking = false) } }
+        }
+    }
+
+    fun setAutoCheckEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean("automatic", enabled).apply()
+        mutableState.update { it.copy(autoCheckEnabled = enabled, release = if (enabled) it.release else null) }
+        if (!enabled && automaticRequest) checkJob?.cancel()
+    }
+
+    fun dismissUpdate() {
+        mutableState.update { it.copy(release = null) }
+    }
+
+    fun skipVersion() {
+        val release = state.value.release ?: return
+        preferences.edit().putString("skipped_version", release.version.substringBefore('+')).apply()
+        dismissUpdate()
+    }
+
+    private companion object {
+        const val CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
+    }
+}
