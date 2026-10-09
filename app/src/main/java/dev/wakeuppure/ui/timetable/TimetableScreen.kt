@@ -10,11 +10,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Today
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -24,33 +25,34 @@ import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.domain.usecase.*
 import dev.wakeuppure.ui.background.*
 import java.time.*
-import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun TimetableScreen(data: ScheduleData, now: LocalDateTime, onDetail: (CourseWithPeriods) -> Unit,
-    onEdit: (CourseWithPeriods) -> Unit, onSettings: () -> Unit) {
+fun TimetableScreen(data: ScheduleData, all: List<ScheduleData>, now: LocalDateTime, onDetail: (CourseWithPeriods) -> Unit,
+    onEdit: (CourseWithPeriods) -> Unit, onSelect: (Long) -> Unit, onNewSchedule: () -> Unit, onImport: () -> Unit) {
     val current = WeekCalculator.week(data.schedule.semesterStartDate, now.toLocalDate())
     val pager = key(data.schedule.id, current, data.schedule.maxWeeks) {
         rememberPagerState(initialPage = current.coerceIn(1, data.schedule.maxWeeks) - 1, pageCount = { data.schedule.maxWeeks })
     }
     val week = pager.currentPage + 1
     val scope = rememberCoroutineScope()
+    var panel by remember { mutableStateOf(false) }
     val allDays = (0..6).map { (data.schedule.firstDay - 1 + it) % 7 + 1 }
     val days = allDays.filter { data.schedule.showWeekend || it <= 5 }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().background(backgroundChromeColor()).heightIn(min = 64.dp).padding(start = 14.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            val weekday = "周" + listOf("一", "二", "三", "四", "五", "六", "日")[now.dayOfWeek.value - 1]
-            Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                Text(if (week == current) "第${week}周  $weekday" else "第${week}周 · 非本周",
-                    fontSize = 19.sp, lineHeight = 23.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text((if (week != current) "今天$weekday · " else "") + now.format(DateTimeFormatter.ofPattern("yyyy/M/d")),
-                    fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { panel = true }.padding(vertical = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (week == current) "第${week}周" else "第${week}周 · 非本周",
+                        fontSize = 19.sp, lineHeight = 23.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Icon(Icons.Default.ExpandMore, "选择周次或课表", Modifier.size(20.dp))
+                }
+                Text(data.schedule.name, fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             IconButton(onClick = { scope.launch { pager.animateScrollToPage((pager.currentPage - 1).coerceAtLeast(0)) } }, enabled = week > 1) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "上一周") }
             IconButton(onClick = { scope.launch { pager.animateScrollToPage((pager.currentPage + 1).coerceAtMost(data.schedule.maxWeeks - 1)) } }, enabled = week < data.schedule.maxWeeks) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "下一周") }
             IconButton(onClick = { scope.launch { pager.animateScrollToPage(current.coerceIn(1, data.schedule.maxWeeks) - 1) } }) { Icon(Icons.Default.Today, "回到本周") }
-            IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "课表设置") }
         }
         if (current < 1 || current > data.schedule.maxWeeks) Text(if (current < 1) "尚未开学" else "本学期已结束",
             Modifier.align(Alignment.CenterHorizontally).background(backgroundPanelColor()).padding(bottom = 8.dp), color = MaterialTheme.colorScheme.secondary)
@@ -58,6 +60,9 @@ fun TimetableScreen(data: ScheduleData, now: LocalDateTime, onDetail: (CourseWit
             TimetableWeek(data, now, page + 1, days, onDetail, onEdit)
         }
     }
+    if (panel) WeekSchedulePanel(data, all, week, current, onDismiss = { panel = false },
+        onWeek = { target -> panel = false; scope.launch { pager.animateScrollToPage(target - 1) } },
+        onSelect = { panel = false; onSelect(it) }, onNewSchedule = { panel = false; onNewSchedule() }, onImport = { panel = false; onImport() })
 }
 
 @OptIn(ExperimentalFoundationApi::class)

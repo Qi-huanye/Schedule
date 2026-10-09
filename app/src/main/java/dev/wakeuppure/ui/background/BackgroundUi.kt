@@ -4,10 +4,7 @@ import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -24,10 +22,12 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.wakeuppure.domain.model.BackgroundFocus
+import dev.wakeuppure.ui.components.SegmentRow
+import dev.wakeuppure.ui.components.SettingRow
+import dev.wakeuppure.ui.components.SwitchRow
 import kotlin.math.roundToInt
 
 val LocalBackgroundActive = staticCompositionLocalOf { false }
@@ -161,81 +161,37 @@ fun BackgroundSettingsSection(
     onChoose: () -> Unit,
     onRemove: () -> Unit,
     onImageThemeChanged: (Boolean) -> Unit,
-    onCourseThemeChanged: (Boolean) -> Unit,
     onBlurChanging: (Float) -> Unit = {},
     onBlurChanged: () -> Unit = {},
     onFocusChanged: (BackgroundFocus) -> Unit = {},
 ) {
     val editable = state.hasImage && !state.busy
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // The page itself sits on the photo, so every adjustment below previews live without a thumbnail.
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("应用背景", style = MaterialTheme.typography.titleSmall)
-                Text(if (state.hasImage) "已设置，调整效果会直接显示在页面背景上" else "选择一张本机图片作为背景",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    // The page itself sits on the photo, so every adjustment below previews live without a large thumbnail.
+    Column {
+        if (!state.hasImage) SettingRow("背景图片", "未设置", onClick = if (state.busy) null else onChoose)
+        else Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("背景图片", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+            state.bitmap?.let { bitmap ->
+                val image = remember(bitmap) { bitmap.asImageBitmap() }
+                Image(image, "当前背景", Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
             }
-            if (state.hasImage) TextButton(onClick = onRemove, enabled = !state.busy) { Text("移除背景") }
+            TextButton(onClick = onChoose, enabled = !state.busy) { Text("更换") }
+            TextButton(onClick = onRemove, enabled = !state.busy) { Text("移除") }
         }
-        OutlinedButton(onClick = onChoose, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.AddPhotoAlternate, null, Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(if (state.hasImage) "更换背景图片" else "选择背景图片")
-        }
-        if (state.busy) {
-            LinearProgressIndicator(Modifier.fillMaxWidth())
-            Text("正在处理背景…", style = MaterialTheme.typography.bodySmall)
-        }
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("背景模糊", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                Text("${(state.settings.blur * 100).roundToInt()}%", style = MaterialTheme.typography.labelLarge,
+        if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+        if (state.hasImage) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("模糊", style = MaterialTheme.typography.bodyLarge)
+                Slider(state.settings.blur, onBlurChanging, Modifier.weight(1f).testTag("background_blur"),
+                    enabled = editable, onValueChangeFinished = onBlurChanged)
+                Text("${(state.settings.blur * 100).roundToInt()}%", Modifier.widthIn(min = 40.dp), style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Slider(state.settings.blur, onBlurChanging, Modifier.fillMaxWidth().testTag("background_blur"),
-                enabled = editable, onValueChangeFinished = onBlurChanged)
-            Row {
-                Text("清晰图片", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f))
-                Text("突出课程", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            SegmentRow("位置", listOf(BackgroundFocus.TOP to "偏上", BackgroundFocus.CENTER to "居中", BackgroundFocus.BOTTOM to "偏下"),
+                state.settings.focus, onFocusChanged, 200.dp, editable)
+            SwitchRow("主题跟随背景", state.settings.imageTheme, onImageThemeChanged, editable)
         }
-        BackgroundChoice("图片位置", "让人物或主体避开课程区域", listOf(BackgroundFocus.TOP to "偏上",
-            BackgroundFocus.CENTER to "居中", BackgroundFocus.BOTTOM to "偏下"), state.settings.focus, editable, onFocusChanged)
-        BackgroundSwitch("主题跟随背景", "根据图片自动生成浅色和深色主题", state.settings.imageTheme,
-            editable, onImageThemeChanged)
-        BackgroundSwitch("课程跟随背景配色", "为课程自动配色，关闭后恢复原有颜色", state.settings.courseTheme,
-            editable, onCourseThemeChanged)
-        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-        Text("图片仅保存在本机，不会上传；课表备份不包含背景图片。", style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun <T> BackgroundChoice(title: String, subtitle: String, options: List<Pair<T, String>>, selected: T,
-    enabled: Boolean, onChange: (T) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, style = MaterialTheme.typography.bodyLarge)
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            options.forEachIndexed { index, (value, label) ->
-                SegmentedButton(selected = value == selected, onClick = { onChange(value) }, enabled = enabled,
-                    shape = SegmentedButtonDefaults.itemShape(index, options.size)) { Text(label) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun BackgroundSwitch(title: String, subtitle: String, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().toggleable(checked, enabled, Role.Switch, onChange).padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked, onCheckedChange = null, enabled = enabled)
+        state.error?.let { Text(it, Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
     }
 }

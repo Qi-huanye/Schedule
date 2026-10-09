@@ -25,18 +25,18 @@ import org.junit.runner.RunWith
 class BackgroundUiTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun noImageOffersPickerButDisablesImageOptions() {
+    @Test fun noImageShowsOnlyThePickerRow() {
         var picked = false
         compose.setContent {
             PureTheme("light") {
-                Column { BackgroundSettingsSection(BackgroundUiState(), { picked = true }, {}, {}, {}) }
+                Column { BackgroundSettingsSection(BackgroundUiState(), { picked = true }, {}, {}) }
             }
         }
-        compose.onNodeWithText("选择背景图片").performClick()
+        compose.onNodeWithText("背景图片").performClick()
         compose.runOnIdle { assertTrue(picked) }
-        compose.onNodeWithText("主题跟随背景").assertIsNotEnabled()
-        compose.onNodeWithText("课程跟随背景配色").assertIsNotEnabled()
-        compose.onNodeWithText("移除背景").assertDoesNotExist()
+        compose.onNodeWithText("主题跟随背景").assertDoesNotExist()
+        compose.onNodeWithText("模糊").assertDoesNotExist()
+        compose.onNodeWithText("移除").assertDoesNotExist()
     }
 
     @Test fun themeAndCourseSwitchesAreIndependentAndRemovalRestoresStoredColor() {
@@ -52,8 +52,7 @@ class BackgroundUiTest {
                 SideEffect { observedPrimary = primary; observedCourse = course; observedPalette = palette }
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     BackgroundSettingsSection(state, {}, { state = BackgroundUiState() },
-                        { state = state.copy(settings = state.settings.copy(imageTheme = it)) },
-                        { state = state.copy(settings = state.settings.copy(courseTheme = it)) })
+                        { state = state.copy(settings = state.settings.copy(imageTheme = it)) })
                 }
             }
         }
@@ -63,18 +62,19 @@ class BackgroundUiTest {
             assertEquals(Color(0xFF123456), observedCourse)
             assertNull(observedPalette)
         }
-        compose.onNodeWithText("课程跟随背景配色").performScrollTo().performClick().assertIsOn()
+        // Course colors follow the image from the palette sheet; the section only renders the result.
+        compose.runOnIdle { state = state.copy(settings = state.settings.copy(courseTheme = true)) }
         compose.runOnIdle {
             assertEquals(state.colors!!.light.primary, observedPrimary)
             assertEquals(Color(state.colors!!.lightCourses[1]), observedCourse)
         }
         compose.onNodeWithText("主题跟随背景").performScrollTo().performClick().assertIsOff()
         compose.runOnIdle { assertEquals(state.colors!!.lightCourses, observedPalette) }
-        compose.onNodeWithText("课程跟随背景配色").performScrollTo().performClick().assertIsOff()
+        compose.runOnIdle { state = state.copy(settings = state.settings.copy(courseTheme = false)) }
         compose.runOnIdle { assertEquals(Color(0xFF123456), observedCourse) }
-        compose.onNodeWithText("移除背景").performScrollTo().performClick()
+        compose.onNodeWithText("移除").performScrollTo().performClick()
         compose.onNodeWithTag("app_background_image").assertDoesNotExist()
-        compose.onNodeWithText("选择背景图片").assertIsDisplayed()
+        compose.onNodeWithText("未设置").assertIsDisplayed()
         compose.runOnIdle { assertNull(observedPalette); assertEquals(Color(0xFF123456), observedCourse) }
     }
 
@@ -106,15 +106,15 @@ class BackgroundUiTest {
         var state by mutableStateOf(imageState().copy(busy = true))
         compose.setContent {
             PureTheme("dark", state) {
-                Column(Modifier.verticalScroll(rememberScrollState())) { BackgroundSettingsSection(state, {}, {}, {}, {}) }
+                Column(Modifier.verticalScroll(rememberScrollState())) { BackgroundSettingsSection(state, {}, {}, {}) }
             }
         }
-        compose.onNodeWithText("更换背景图片").assertIsNotEnabled()
-        compose.onNodeWithText("移除背景").assertIsNotEnabled()
-        compose.onNodeWithText("课程跟随背景配色").assertIsNotEnabled()
+        compose.onNodeWithText("更换").assertIsNotEnabled()
+        compose.onNodeWithText("移除").assertIsNotEnabled()
+        compose.onNodeWithText("主题跟随背景").assertIsNotEnabled()
         compose.runOnIdle { state = state.copy(busy = false, error = "无法读取这张图片") }
         compose.onNodeWithText("无法读取这张图片").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("更换背景图片").assertIsEnabled()
+        compose.onNodeWithText("更换").assertIsEnabled()
         compose.onNodeWithTag("app_background_image").assertExists()
     }
 
