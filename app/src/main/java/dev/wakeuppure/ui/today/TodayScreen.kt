@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.wakeuppure.domain.model.*
@@ -46,8 +47,10 @@ fun TodayScreen(data: ScheduleData, now: LocalDateTime, onCourse: (CourseWithPer
                 supportingContent = { Text(listOf(occurrence.classroom, occurrence.course.teacher).filter { it.isNotBlank() }.joinToString(" · ")) },
                 trailingContent = { if (!now.isBefore(occurrence.start) && now.isBefore(occurrence.end)) Text("进行中", color = courseColors?.second ?: MaterialTheme.colorScheme.primary) },
                 colors = colors,
-                modifier = Modifier.clickable { onCourse(data.courses.first { it.course.id == occurrence.course.id }) })
-            HorizontalDivider()
+                // Over a photo each course is its own rounded card, matching the summary panel above.
+                modifier = Modifier.then(if (LocalBackgroundActive.current) Modifier.clip(RoundedCornerShape(16.dp)) else Modifier)
+                    .clickable { onCourse(data.courses.first { it.course.id == occurrence.course.id }) })
+            if (!LocalBackgroundActive.current) HorizontalDivider()
         }
     }
 }

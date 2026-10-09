@@ -8,6 +8,7 @@ import android.net.Uri
 import androidx.exifinterface.media.ExifInterface
 import androidx.test.core.app.ApplicationProvider
 import dev.wakeuppure.data.background.BackgroundRepository
+import dev.wakeuppure.domain.model.BackgroundFocus
 import dev.wakeuppure.domain.model.BackgroundSettings
 import dev.wakeuppure.domain.model.ImageColors
 import java.io.ByteArrayInputStream
@@ -173,6 +174,23 @@ class BackgroundRepositoryTest {
         val restarted = BackgroundRepository(context)
         assertEquals(BackgroundSettings(imageTheme = false, courseTheme = true), restarted.load())
         assertNull(restarted.readBitmap(imported))
+    }
+
+    @Test fun layoutChoicesPersistAndInvalidValuesKeepTheImage() = runBlocking {
+        val imported = repository.importImage(Uri.fromFile(createImage("valid.png", 48, 32)))
+        assertEquals(BackgroundSettings.DEFAULT_BLUR, imported.blur)
+        assertEquals(BackgroundFocus.CENTER, imported.focus)
+
+        val changed = repository.setLayout(0.25f, BackgroundFocus.TOP)
+        assertEquals(imported.copy(blur = 0.25f, focus = BackgroundFocus.TOP), changed)
+        assertEquals(changed, BackgroundRepository(context).load())
+        assertEquals(1f, repository.setLayout(7f, BackgroundFocus.TOP).blur)
+        assertEquals(BackgroundSettings.DEFAULT_BLUR, repository.setLayout(Float.NaN, BackgroundFocus.TOP).blur)
+
+        // Values written by a newer or corrupted build fall back to defaults instead of dropping the photo.
+        val stored = preferences.getString("settings", null)!!
+        preferences.edit().putString("settings", stored.replace("\"TOP\"", "\"LEFT\"").replace(Regex("\"blur\":[^,}]+"), "\"blur\":-3")).commit()
+        assertEquals(changed.copy(blur = 0f, focus = BackgroundFocus.CENTER), BackgroundRepository(context).load())
     }
 
     @Test fun corruptAndUnsafeMetadataCannotReadOrDeleteOtherFiles() = runBlocking {

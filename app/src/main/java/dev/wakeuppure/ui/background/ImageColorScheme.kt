@@ -6,7 +6,6 @@ import com.materialkolor.dynamiccolor.DynamicColor
 import com.materialkolor.dynamiccolor.MaterialDynamicColors
 import com.materialkolor.hct.Hct
 import com.materialkolor.scheme.SchemeTonalSpot
-import com.materialkolor.temperature.TemperatureCache
 import com.materialkolor.utils.ColorUtils
 import dev.wakeuppure.domain.model.ImageColors
 import kotlin.math.abs
@@ -15,11 +14,14 @@ import kotlin.math.min
 private const val FALLBACK_SEED = 0xFF16695F.toInt()
 private const val OPAQUE_ALPHA = -0x1000000
 private const val COURSE_COLOR_COUNT = 6
-private const val MIN_COURSE_HUE_DISTANCE = 20.0
+private const val MIN_COURSE_HUE_DISTANCE = 16.0
+// Course hues stay in the wallpaper's own color family, so no card competes with the photo.
+private const val MAX_COURSE_HUE_SPREAD = 60.0
+private const val COURSE_CHROMA = 18.0
 
 /** Every Material 3 role comes from the same image palette, including dialogs and error states. */
 fun imageColorScheme(seed: Int, dark: Boolean): ColorScheme {
-    val scheme = SchemeTonalSpot(chromaticSeed(seed), isDark = dark, contrastLevel = 0.5)
+    val scheme = SchemeTonalSpot(chromaticSeed(seed), isDark = dark, contrastLevel = 0.0)
     val roles = MaterialDynamicColors()
     fun DynamicColor.color(): Color = Color(getArgb(scheme))
 
@@ -63,37 +65,38 @@ fun imageColorScheme(seed: Int, dark: Boolean): ColorScheme {
     )
 }
 
-/** Keeps the image accents, then fills missing hues with related, readable course colors. */
+/**
+ * Six calm course colors from the wallpaper's color family: image hues near the seed first
+ * (k-means clusters, then Score accents), then the nearest free neighbouring hues. All share one low chroma and one tone, so cards read
+ * as a single layer and differ only by hue.
+ */
 fun imageCourseColors(colors: ImageColors, dark: Boolean): List<Int> {
     val seed = chromaticSeed(colors.seed)
-    val courseSeeds = mutableListOf<Hct>()
-    fun addDistinct(candidate: Hct) {
-        if (courseSeeds.size == COURSE_COLOR_COUNT) return
-        // A middle tone and a minimum chroma keep neutral/extreme images from collapsing to gray.
-        val normalized = Hct.from(candidate.hue, candidate.chroma.coerceIn(28.0, 36.0), 60.0)
-        if (courseSeeds.all { hueDistance(it.hue, normalized.hue) >= MIN_COURSE_HUE_DISTANCE }) {
-            courseSeeds += normalized
+    val hues = mutableListOf<Double>()
+    fun addDistinct(hue: Double) {
+        val normalized = ((hue % 360.0) + 360.0) % 360.0
+        if (hues.size < COURSE_COLOR_COUNT && hues.all { hueDistance(it, normalized) >= MIN_COURSE_HUE_DISTANCE }) {
+            hues += normalized
         }
     }
 
-    addDistinct(seed)
-    colors.accents.take(COURSE_COLOR_COUNT).forEach { accent ->
-        val candidate = Hct.fromInt(accent or OPAQUE_ALPHA)
-        if (candidate.chroma >= 5.0) addDistinct(candidate)
+    fun addFromImage(argb: Int, minChroma: Double) {
+        val candidate = Hct.fromInt(argb or OPAQUE_ALPHA)
+        if (candidate.chroma >= minChroma && hueDistance(candidate.hue, seed.hue) <= MAX_COURSE_HUE_SPREAD) addDistinct(candidate.hue)
     }
-    if (courseSeeds.size < COURSE_COLOR_COUNT) {
-        TemperatureCache(courseSeeds.first()).getAnalogousColors(COURSE_COLOR_COUNT, 12)
-            .forEach(::addDistinct)
+
+    addDistinct(seed.hue)
+    // Real image hues first: k-means clusters by size, then Score's accents.
+    colors.clusters.forEach { addFromImage(it, 8.0) }
+    colors.accents.take(COURSE_COLOR_COUNT).forEach { addFromImage(it, 10.0) }
+    // Only a palette the photo cannot fill falls back to neighbours: first evenly spaced ones,
+    // then a fine outward scan that uses gaps between image hues before leaving the family.
+    for (offset in (20..60 step 20) + (1..180)) {
+        addDistinct(seed.hue + offset)
+        addDistinct(seed.hue - offset)
     }
-    // Gamut clipping can leave neighbouring analogues too close. Try nearby hue steps until
-    // six distinct hues are available; this is bounded and identical in light and dark modes.
-    for (step in 1..12) {
-        if (courseSeeds.size == COURSE_COLOR_COUNT) break
-        addDistinct(Hct.from(seed.hue - step * 15.0, 32.0, 60.0))
-        addDistinct(Hct.from(seed.hue + step * 15.0, 32.0, 60.0))
-    }
-    val tone = if (dark) 30.0 else 85.0
-    return courseSeeds.map { Hct.from(it.hue, it.chroma, tone).toInt() }
+    val tone = if (dark) 30.0 else 90.0
+    return hues.map { Hct.from(it, COURSE_CHROMA, tone).toInt() }
 }
 
 /** Picks opaque black or white with the larger WCAG contrast against an opaque background. */

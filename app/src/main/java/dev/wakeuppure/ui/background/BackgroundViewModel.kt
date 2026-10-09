@@ -7,6 +7,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.wakeuppure.data.background.BackgroundRepository
+import dev.wakeuppure.domain.model.BackgroundFocus
 import dev.wakeuppure.domain.model.BackgroundSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +62,20 @@ class BackgroundViewModel(application: Application) : AndroidViewModel(applicati
     fun setImageTheme(enabled: Boolean) = setOptions(enabled, state.value.settings.courseTheme)
     fun setCourseTheme(enabled: Boolean) = setOptions(state.value.settings.imageTheme, enabled)
 
+    /** Live slider feedback: updates the screen only; [commitBlur] persists the final value. */
+    fun previewBlur(blur: Float) {
+        if (state.value.busy) return
+        mutableState.update { it.copy(settings = it.settings.copy(blur = blur.coerceIn(0f, 1f))) }
+    }
+    fun commitBlur() = setLayout(state.value.settings.blur, state.value.settings.focus)
+    fun setFocus(focus: BackgroundFocus) = setLayout(state.value.settings.blur, focus)
+
+    private fun setLayout(blur: Float, focus: BackgroundFocus) {
+        perform("外观设置保存失败，请重试。") {
+            state.value.copy(settings = repository.setLayout(blur, focus), error = null)
+        }
+    }
+
     private fun setOptions(imageTheme: Boolean, courseTheme: Boolean) {
         perform("外观设置保存失败，请重试。") {
             state.value.copy(settings = repository.setOptions(imageTheme, courseTheme), error = null)
@@ -76,7 +91,7 @@ class BackgroundViewModel(application: Application) : AndroidViewModel(applicati
         val bitmap = repository.readBitmap(settings)
             ?: return BackgroundUiState(settings = settings.copy(imageName = null, colors = null), error = "背景图片无法读取，请重新选择。")
         val colors = withContext(Dispatchers.Default) {
-            val source = requireNotNull(settings.colors)
+            val source = repository.withClusters(requireNotNull(settings.colors), bitmap)
             BackgroundColors(imageColorScheme(source.seed, false), imageColorScheme(source.seed, true),
                 imageCourseColors(source, false), imageCourseColors(source, true))
         }

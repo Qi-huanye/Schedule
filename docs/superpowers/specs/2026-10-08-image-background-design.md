@@ -27,3 +27,8 @@ Verification: image persistence, failure rollback, orientation and bounded decod
 palette determinism and contrast in light/dark modes; UI selection/toggle/removal;
 unit/Lint/build checks and device validation using synthetic images. Test install
 on the already-authorized connected phone while preserving its course database.
+
+Revision 2026-10-09: one gradient scrim replaces opaque top/bottom panels; a blur
+slider drives blur, scrim and card opacity together, plus an image focus choice.
+Standard contrast; course colors stay within ±60° of the seed at one chroma/tone,
+filled from HCT k-means clusters before any synthesized neighbouring hue.

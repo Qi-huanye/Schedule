@@ -4,6 +4,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import com.materialkolor.hct.Hct
+import dev.wakeuppure.data.background.HctKMeans
 import dev.wakeuppure.data.background.ImageColorExtractor
 import dev.wakeuppure.domain.model.ImageColors
 import dev.wakeuppure.ui.background.contrastingTextColor
@@ -92,19 +93,67 @@ class ImageColorsTest {
         }
     }
 
-    @Test fun courseColorsKeepSourceAccentsAndAdaptToDarkMode() {
-        val seed = Hct.from(190.0, 44.0, 50.0).toInt()
-        val accent = Hct.from(275.0, 40.0, 50.0).toInt()
-        val source = ImageColors(seed, listOf(seed, accent))
+    @Test fun courseColorsStayInTheImageFamilyAndAdaptToDarkMode() {
+        val seed = Hct.from(206.0, 36.0, 46.0).toInt()
+        val nearAccent = Hct.from(246.0, 56.0, 66.0).toInt()
+        val yellowAccent = Hct.from(70.0, 50.0, 80.0).toInt()
+        val source = ImageColors(seed, listOf(seed, nearAccent, yellowAccent))
         val light = imageCourseColors(source, dark = false)
         val dark = imageCourseColors(source, dark = true)
 
         assertTrue(hueDifference(seed, light.first()) < 5.0)
-        assertTrue(light.any { hueDifference(accent, it) < 5.0 })
-        assertTrue(light.all { Hct.fromInt(it).tone in 80.0..92.0 })
-        assertTrue(dark.all { Hct.fromInt(it).tone in 22.0..38.0 })
+        assertTrue(light.any { hueDifference(nearAccent, it) < 5.0 })
+        // A far hue would compete with the photo, as yellow cards did over a blue wallpaper.
+        assertTrue(light.none { hueDifference(yellowAccent, it) < 30.0 })
+        assertTrue((light + dark).all { hueDifference(seed, it) <= 62.0 })
+        assertTrue(light.all { Hct.fromInt(it).tone in 88.0..92.0 })
+        assertTrue(dark.all { Hct.fromInt(it).tone in 28.0..32.0 })
+        // One chroma for every card: they differ by hue only, never by loudness.
+        val chromas = (light + dark).map { Hct.fromInt(it).chroma }
+        assertTrue(chromas.max() - chromas.min() < 3.0 && chromas.max() <= 22.0)
         for (index in light.indices) assertTrue(hueDifference(light[index], dark[index]) < 5.0)
         for (color in light + dark) assertTrue(contrast(color, contrastingTextColor(color)) >= 4.5)
+    }
+
+    @Test fun kMeansFindsTheImageHuesLargestFirstAndIgnoresNeutrals() {
+        val blue = Hct.from(250.0, 50.0, 60.0).toInt()
+        val teal = Hct.from(190.0, 40.0, 55.0).toInt()
+        val violet = Hct.from(290.0, 40.0, 50.0).toInt()
+        val pixels = IntArray(3_000) {
+            when {
+                it < 1_200 -> 0xFFF4F4F4.toInt()
+                it < 2_100 -> blue
+                it < 2_600 -> teal
+                it < 2_900 -> violet
+                else -> 0x00FF0000
+            }
+        }
+
+        val clusters = HctKMeans.clusters(pixels)
+
+        assertEquals(3, clusters.size)
+        assertTrue(hueDifference(clusters[0], blue) < 3.0)
+        assertTrue(hueDifference(clusters[1], teal) < 3.0)
+        assertTrue(hueDifference(clusters[2], violet) < 3.0)
+        assertEquals(clusters, HctKMeans.clusters(pixels.reversedArray()))
+        assertTrue(HctKMeans.clusters(IntArray(100) { 0xFF777777.toInt() }).isEmpty())
+    }
+
+    @Test fun courseColorsPreferImageClustersOverInventedHues() {
+        val seed = Hct.from(220.0, 40.0, 50.0).toInt()
+        val clusterHues = listOf(185.0, 250.0, 268.0)
+        val source = ImageColors(seed, listOf(seed), clusterHues.map { Hct.from(it, 30.0, 60.0).toInt() } +
+            Hct.from(60.0, 40.0, 70.0).toInt())
+
+        val courses = imageCourseColors(source, dark = false)
+
+        // Seed, then each real cluster hue in size order; the far yellow cluster is left out.
+        assertTrue(hueDifference(courses[0], seed) < 5.0)
+        clusterHues.forEachIndexed { index, hue ->
+            assertTrue(hueDifference(courses[index + 1], Hct.from(hue, 18.0, 90.0).toInt()) < 5.0)
+        }
+        assertTrue(courses.all { hueDifference(seed, it) <= 62.0 })
+        assertEquals(6, courses.distinct().size)
     }
 
     @Test fun themeSurfacesAndAccentsAllRespondToTheImageSeed() {
@@ -115,9 +164,8 @@ class ImageColorsTest {
             val pinkRoles = imageDependentRoles(pink)
 
             for (role in greenRoles.keys) {
-                // Material fixes the light lowest container at white; medium contrast also
-                // raises dark onSurface to white against the brightest allowed surface.
-                if ((!dark && role == "surfaceContainerLowest") || (dark && role == "onSurface")) {
+                // Material fixes the light lowest container at white.
+                if (!dark && role == "surfaceContainerLowest") {
                     assertEquals(Color.White, greenRoles.getValue(role))
                     assertEquals(Color.White, pinkRoles.getValue(role))
                 } else {
@@ -162,14 +210,15 @@ class ImageColorsTest {
         }
     }
 
-    @Test fun generatedThemeUsesMediumContrastIncludingErrorRoles() {
+    @Test fun generatedThemeUsesStandardContrastSoContainersStaySoft() {
         val light = imageColorScheme(0xFF008577.toInt(), dark = false)
         val dark = imageColorScheme(0xFF008577.toInt(), dark = true)
 
-        assertTrue(contrast(light.primary.toArgb(), light.onPrimary.toArgb()) >= 6.8)
-        assertTrue(contrast(light.error.toArgb(), light.onError.toArgb()) >= 6.8)
-        assertTrue(contrast(dark.primary.toArgb(), dark.onPrimary.toArgb()) >= 6.8)
-        assertTrue(contrast(dark.error.toArgb(), dark.onError.toArgb()) >= 6.8)
+        // Medium contrast darkened primaryContainer (the FAB) to a heavy teal over light photos.
+        assertTrue(Hct.fromInt(light.primaryContainer.toArgb()).tone >= 85.0)
+        assertTrue(Hct.fromInt(dark.primaryContainer.toArgb()).tone <= 35.0)
+        assertTrue(contrast(light.primary.toArgb(), light.onPrimary.toArgb()) >= 4.5)
+        assertTrue(contrast(dark.primary.toArgb(), dark.onPrimary.toArgb()) >= 4.5)
     }
 
     @Test fun textColorMaintainsNormalTextContrastAcrossRgbSpace() {

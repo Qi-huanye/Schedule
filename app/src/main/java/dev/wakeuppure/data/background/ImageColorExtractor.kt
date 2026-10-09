@@ -33,6 +33,6 @@ object ImageColorExtractor {
         sample.sort()
         val populations = QuantizerCelebi.quantize(sample, MAX_QUANTIZED_COLORS)
         val accents = Score.score(populations, desired = 6, fallbackColorArgb = FALLBACK_SEED)
-        return ImageColors(seed = accents.first(), accents = accents)
+        return ImageColors(seed = accents.first(), accents = accents, clusters = HctKMeans.clusters(sample))
     }
 }

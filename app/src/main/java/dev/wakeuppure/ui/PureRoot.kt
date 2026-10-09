@@ -57,7 +57,7 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = view
     PureTheme(appearance, backgroundState) {
         Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) {
             Scaffold(containerColor = Color.Transparent, topBar = {
-                if (route in listOf("timetable", "today", "mine")) TopAppBar(title = {
+                if (route in listOf("today", "mine") || (route == "timetable" && data == null)) TopAppBar(title = {
                     Column(Modifier.clickable { scheduleMenu = true }) {
                         Text(data?.schedule?.name ?: "Schedule", style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("Schedule", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -67,9 +67,9 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = view
                         }
                     }
                 }, actions = { IconButton(onClick = { editSchedule = data; nav.navigate("schedule") }) { Icon(Icons.Default.Settings, "课表设置") } },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = backgroundPanelColor(MaterialTheme.colorScheme.surface)))
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = backgroundChromeColor(MaterialTheme.colorScheme.surface)))
             }, bottomBar = {
-                if (route in listOf("timetable", "today", "mine")) NavigationBar(containerColor = backgroundPanelColor(MaterialTheme.colorScheme.surfaceContainer)) {
+                if (route in listOf("timetable", "today", "mine")) NavigationBar(containerColor = backgroundChromeColor(MaterialTheme.colorScheme.surfaceContainer)) {
                     listOf(Triple("timetable", "课表", Icons.Default.CalendarMonth), Triple("today", "今日", Icons.Default.Today), Triple("mine", "我的", Icons.Default.PersonOutline)).forEach { (id, label, icon) ->
                         NavigationBarItem(selected = route == id, onClick = { nav.navigate(id) { popUpTo("timetable"); launchSingleTop = true } }, icon = { Icon(icon, label) }, label = { Text(label) })
                     }
@@ -80,7 +80,7 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = view
                 NavHost(nav, startDestination = "timetable", modifier = Modifier.padding(padding)) {
                     composable("timetable") {
                         if (data == null) EmptySchedule { editSchedule = null; nav.navigate("schedule") }
-                        else TimetableScreen(data, now, { detail = it }, { editCourse = it; nav.navigate("course") })
+                        else TimetableScreen(data, now, { detail = it }, { editCourse = it; nav.navigate("course") }, { editSchedule = data; nav.navigate("schedule") })
                     }
                     composable("today") { if (data == null) EmptySchedule { nav.navigate("schedule") } else TodayScreen(data, now) { detail = it } }
                     composable("mine") {
@@ -105,7 +105,8 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = view
                                 }
                             }
                             BackgroundSettingsSection(backgroundState, { imagePicker.launch(arrayOf("image/*")) },
-                                backgrounds::clearBackground, backgrounds::setImageTheme, backgrounds::setCourseTheme)
+                                backgrounds::clearBackground, backgrounds::setImageTheme, backgrounds::setCourseTheme,
+                                backgrounds::previewBlur, backgrounds::commitBlur, backgrounds::setFocus)
                             HorizontalDivider()
                             Button(onClick = { nav.navigate("transfer") }, modifier = Modifier.fillMaxWidth()) { Text("导入 / 导出 / 数据备份") }
                             data?.let { ReminderSettings(vm, it) }

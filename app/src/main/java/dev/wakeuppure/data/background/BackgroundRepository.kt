@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.net.Uri
 import android.util.AtomicFile
 import androidx.exifinterface.media.ExifInterface
+import dev.wakeuppure.domain.model.BackgroundFocus
 import dev.wakeuppure.domain.model.BackgroundSettings
 import dev.wakeuppure.domain.model.ImageColors
 import java.io.File
@@ -76,12 +77,16 @@ class BackgroundRepository(context: Context) {
     }
 
     suspend fun setOptions(imageTheme: Boolean, courseTheme: Boolean): BackgroundSettings =
+        update { it.copy(imageTheme = imageTheme, courseTheme = courseTheme) }
+
+    suspend fun setLayout(blur: Float, focus: BackgroundFocus): BackgroundSettings =
+        update { it.copy(blur = saneBlur(blur), focus = focus) }
+
+    private suspend fun update(transform: (BackgroundSettings) -> BackgroundSettings): BackgroundSettings =
         withContext(Dispatchers.IO) {
             imageOperations.withLock {
                 currentCoroutineContext().ensureActive()
-                synchronized(settingsLock) {
-                    loadLocked().copy(imageTheme = imageTheme, courseTheme = courseTheme).also(::persistLocked)
-                }
+                synchronized(settingsLock) { transform(loadLocked()).also(::persistLocked) }
             }
         }
 
@@ -126,7 +131,7 @@ class BackgroundRepository(context: Context) {
     }
 
     private fun loadLocked(): BackgroundSettings {
-        val settings = readSettingsLocked()
+        val settings = readSettingsLocked().let { it.copy(blur = saneBlur(it.blur)) }
         return if (validColors(settings.colors) && imageFile(settings.imageName)?.isFile == true) {
             settings
         } else {
@@ -291,7 +296,12 @@ class BackgroundRepository(context: Context) {
         }
     }
 
-    private fun extractColors(bitmap: Bitmap): ImageColors {
+    /** Colors saved by builds before k-means lack clusters; derive them from the stored image. */
+    fun withClusters(colors: ImageColors, bitmap: Bitmap): ImageColors =
+        if (colors.clusters.isNotEmpty()) colors
+        else colors.copy(clusters = HctKMeans.clusters(samplePixels(bitmap)).take(MAX_CLUSTERS))
+
+    private fun samplePixels(bitmap: Bitmap): IntArray {
         val scale = minOf(1.0, SAMPLE_SIZE.toDouble() / max(bitmap.width, bitmap.height))
         val sample = Bitmap.createScaledBitmap(
             bitmap,
@@ -300,14 +310,18 @@ class BackgroundRepository(context: Context) {
             true,
         )
         return try {
-            val pixels = IntArray(sample.width * sample.height)
-            sample.getPixels(pixels, 0, sample.width, 0, 0, sample.width, sample.height)
-            val extracted = ImageColorExtractor.extract(pixels)
-            extracted.copy(accents = extracted.accents.take(MAX_ACCENTS)).also {
-                if (!validColors(it)) throw IOException("无法生成图片配色")
+            IntArray(sample.width * sample.height).also {
+                sample.getPixels(it, 0, sample.width, 0, 0, sample.width, sample.height)
             }
         } finally {
             if (sample !== bitmap) sample.recycle()
+        }
+    }
+
+    private fun extractColors(bitmap: Bitmap): ImageColors {
+        val extracted = ImageColorExtractor.extract(samplePixels(bitmap))
+        return extracted.copy(accents = extracted.accents.take(MAX_ACCENTS), clusters = extracted.clusters.take(MAX_CLUSTERS)).also {
+            if (!validColors(it)) throw IOException("无法生成图片配色")
         }
     }
 
@@ -329,7 +343,11 @@ class BackgroundRepository(context: Context) {
 
     private fun validColors(colors: ImageColors?): Boolean =
         colors != null && colors.seed ushr 24 == 255 && colors.accents.size in 1..MAX_ACCENTS &&
-            colors.accents.all { it ushr 24 == 255 }
+            colors.accents.all { it ushr 24 == 255 } && colors.clusters.size <= MAX_CLUSTERS &&
+            colors.clusters.all { it ushr 24 == 255 }
+
+    private fun saneBlur(blur: Float): Float =
+        if (blur.isFinite()) blur.coerceIn(0f, 1f) else BackgroundSettings.DEFAULT_BLUR
 
     private companion object {
         const val PREFERENCES = "background_settings"
@@ -339,9 +357,10 @@ class BackgroundRepository(context: Context) {
         const val MAX_IMAGE_SIZE = 2048
         const val SAMPLE_SIZE = 128
         const val MAX_ACCENTS = 6
+        const val MAX_CLUSTERS = 8
         val SAFE_IMAGE_NAME = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.png")
         val SAFE_SOURCE_NAME = Regex("source-[0-9]+\\.tmp")
-        val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; coerceInputValues = true }
         // Multiple repositories can be constructed during recreation; they share one private store.
         val imageOperations = Mutex()
         val settingsLock = Any()
