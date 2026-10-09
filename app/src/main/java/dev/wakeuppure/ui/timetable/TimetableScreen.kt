@@ -95,7 +95,7 @@ private fun TimetableWeek(data: ScheduleData, now: LocalDateTime, week: Int, day
         val height = 68.dp
         Row(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
             .padding(bottom = 80.dp, end = 6.dp)) {
-            Column(Modifier.width(42.dp).background(backgroundRailColor())) { slots.forEach { slot ->
+            Column(Modifier.width(42.dp)) { slots.forEach { slot ->
                 Column(Modifier.height(height).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(slot.section.toString(), fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold)
                     Text(slot.startTime, fontSize = 9.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -48,8 +48,6 @@ data class BackgroundLayers(
     val edgeScrim: Float,
     /** Cards and forms on Today / My pages. */
     val panel: Float,
-    /** The time rail beside the grid; it fades out as the scrim takes over. */
-    val rail: Float,
     val course: Float,
     val ghost: Float,
 ) {
@@ -69,7 +67,6 @@ data class BackgroundLayers(
                 darkScrim = mix(0.30f, 0.66f) + blurFallback * t,
                 edgeScrim = mix(0.74f, 0.84f),
                 panel = mix(0.86f, 0.92f),
-                rail = mix(0.62f, 0f),
                 course = mix(0.93f, 1f),
                 ghost = mix(0.72f, 0.55f),
             )
@@ -127,11 +124,6 @@ fun backgroundPanelColor(default: Color = Color.Transparent): Color =
 @Composable
 fun backgroundChromeColor(default: Color = Color.Transparent): Color =
     if (LocalBackgroundLayers.current != null) Color.Transparent else default
-
-/** The timetable's time rail. */
-@Composable
-fun backgroundRailColor(): Color =
-    LocalBackgroundLayers.current?.let { MaterialTheme.colorScheme.surface.copy(alpha = it.rail) } ?: Color.Transparent
 
 @Composable
 fun backgroundScreenColor(): Color = backgroundPanelColor(MaterialTheme.colorScheme.background)
