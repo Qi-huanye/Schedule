@@ -14,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -39,6 +41,10 @@ class BackgroundViewModel(application: Application) : AndroidViewModel(applicati
     private val mutableState = MutableStateFlow(BackgroundUiState())
     val state = mutableState.asStateFlow()
     private var pendingImage: Uri? = null
+    // Image operations and quick saves run one at a time in call order: viewModelScope starts each
+    // coroutine on the main thread right away, so the fair mutex queues them as they were called.
+    private val operations = Mutex()
+    private var pendingSaves = 0
 
     init {
         perform("背景加载失败，请重新选择图片。") {
@@ -65,20 +71,40 @@ class BackgroundViewModel(application: Application) : AndroidViewModel(applicati
         if (state.value.busy) return
         mutableState.update { it.copy(settings = it.settings.copy(blur = blur.coerceIn(0f, 1f))) }
     }
-    fun commitBlur() = setLayout(state.value.settings.blur, state.value.settings.focus)
-    fun setFocus(focus: BackgroundFocus) = setLayout(state.value.settings.blur, focus)
+    fun commitBlur() = save({ it }) { repository.setLayout(it.blur, it.focus) }
+    fun setFocus(focus: BackgroundFocus) = save({ it.copy(focus = focus) }) { repository.setLayout(it.blur, it.focus) }
 
-    private fun setLayout(blur: Float, focus: BackgroundFocus) {
-        perform("外观设置保存失败，请重试。") {
-            state.value.copy(settings = repository.setLayout(blur, focus), error = null)
+    private fun setOptions(imageTheme: Boolean, courseTheme: Boolean) =
+        save({ it.copy(imageTheme = imageTheme, courseTheme = courseTheme) }) { repository.setOptions(it.imageTheme, it.courseTheme) }
+
+    /**
+     * Quick settings show at once and are stored in the background. They never set [BackgroundUiState.busy]:
+     * a few milliseconds of busy would insert the progress bar and disable the controls, making the
+     * section jump right after the blur slider is released.
+     */
+    private fun save(change: (BackgroundSettings) -> BackgroundSettings, persist: suspend (BackgroundSettings) -> BackgroundSettings) {
+        mutableState.update { it.copy(settings = change(it.settings), error = null) }
+        val target = state.value.settings
+        pendingSaves++
+        viewModelScope.launch {
+            try {
+                val saved = operations.withLock { persist(target) }
+                // Once every queued change is stored, the stored settings are what the screen should
+                // show; adopting them also restores a change that an image operation published over.
+                if (pendingSaves == 1) mutableState.update { it.copy(settings = saved) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                val stored = withContext(Dispatchers.IO) { repository.load() }
+                mutableState.update { it.copy(settings = stored, error = "外观设置保存失败，请重试。") }
+            } finally {
+                pendingSaves--
+            }
         }
     }
 
-    private fun setOptions(imageTheme: Boolean, courseTheme: Boolean) {
-        perform("外观设置保存失败，请重试。") {
-            state.value.copy(settings = repository.setOptions(imageTheme, courseTheme), error = null)
-        }
-    }
+    /** Suspends until every queued image operation and save has finished. */
+    internal suspend fun awaitIdle() = operations.withLock {}
 
     fun clearBackground() {
         perform("背景移除失败，请重试。") { BackgroundUiState(settings = repository.clear()) }
@@ -101,7 +127,7 @@ class BackgroundViewModel(application: Application) : AndroidViewModel(applicati
         mutableState.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             val next = try {
-                action().copy(busy = false)
+                operations.withLock { action() }.copy(busy = false)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {

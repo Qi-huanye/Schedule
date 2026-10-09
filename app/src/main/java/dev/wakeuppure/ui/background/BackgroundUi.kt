@@ -95,11 +95,10 @@ fun BackgroundContainer(state: BackgroundUiState?, dark: Boolean, content: @Comp
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             if (active && layers != null) {
                 val image = remember(state!!.bitmap) { state.bitmap!!.asImageBitmap() }
-                val softened = if (layers.blur > 0.5.dp) {
-                    // Slight overscan hides the transparent fringe that blur leaves at the edges.
-                    Modifier.graphicsLayer { scaleX = 1.08f; scaleY = 1.08f }
-                        .blur(layers.blur, BlurredEdgeTreatment.Rectangle)
-                } else Modifier
+                // A constant overscan hides the transparent fringe blur leaves at the edges; keeping it at
+                // every blur level means the photo never jumps in size while the slider moves.
+                val softened = Modifier.graphicsLayer { scaleX = 1.08f; scaleY = 1.08f }
+                    .then(if (layers.blur > 0.5.dp) Modifier.blur(layers.blur, BlurredEdgeTreatment.Rectangle) else Modifier)
                 Image(image, null, Modifier.matchParentSize().then(softened).testTag("app_background_image"),
                     contentScale = ContentScale.Crop, alignment = state.settings.focus.alignment())
                 val surface = MaterialTheme.colorScheme.surface

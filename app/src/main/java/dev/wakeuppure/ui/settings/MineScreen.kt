@@ -13,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.wakeuppure.domain.model.*
@@ -32,19 +34,24 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
     val busy by vm.busy.collectAsState()
     var sheet by remember { mutableStateOf<String?>(null) }
     var pendingReminder by remember { mutableStateOf<Int?>(null) }
-    fun update(next: Schedule) { data?.let { vm.saveSchedule(next.copy(updatedAt = System.currentTimeMillis()), it.timeSlots) {} } }
+    // Each quick change applies only its own field to the latest stored schedule, so rapid changes never overwrite each other.
+    fun update(change: (Schedule) -> Schedule) { data?.let { vm.updateSchedule(it.schedule.id, change) } }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) data?.let { update(it.schedule.copy(reminderMinutes = pendingReminder)) } else vm.error.value = "通知权限未开启"
+        val minutes = pendingReminder
+        if (granted) update { it.copy(reminderMinutes = minutes) } else vm.error.value = "通知权限未开启"
     }
     fun setReminder(minutes: Int?) {
-        val schedule = data?.schedule ?: return
+        if (data == null) return
         if (minutes != null && Build.VERSION.SDK_INT >= 33) { pendingReminder = minutes; permission.launch(Manifest.permission.POST_NOTIFICATIONS) }
-        else update(schedule.copy(reminderMinutes = minutes))
+        else update { it.copy(reminderMinutes = minutes) }
     }
     val followsBackground = background.hasImage && background.settings.courseTheme
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-        .padding(if (LocalBackgroundActive.current) 12.dp else 0.dp)
-        .background(backgroundPanelColor(), RoundedCornerShape(20.dp)).padding(bottom = 16.dp)) {
+    // Over a photo the rounded panel stays fixed and its content scrolls inside it, so the panel
+    // edge is never sliced off under the status bar.
+    val panelShape = if (LocalBackgroundActive.current) RoundedCornerShape(20.dp) else RectangleShape
+    Column(Modifier.fillMaxSize().padding(if (LocalBackgroundActive.current) 12.dp else 0.dp)
+        .clip(panelShape).background(backgroundPanelColor())
+        .verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
         Text("我的", Modifier.padding(start = 16.dp, top = 16.dp), style = MaterialTheme.typography.headlineSmall)
         if (data != null) {
             val s = data.schedule
@@ -53,8 +60,8 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
             val start = runCatching { LocalDate.parse(s.semesterStartDate) }.getOrNull()
             SettingRow("学期", listOfNotNull(start?.let { "${it.monthValue}月${it.dayOfMonth}日开学" }, "${s.maxWeeks} 周").joinToString(" · ")) { sheet = "term" }
             SettingRow("作息时间", "每天 ${data.timeSlots.size} 节", onClick = onTimes)
-            SwitchRow("显示周末", s.showWeekend, { update(s.copy(showWeekend = it)) }, enabled = !busy)
-            SegmentRow("每周第一天", listOf(1 to "周一", 7 to "周日"), s.firstDay, { update(s.copy(firstDay = it)) }, 132.dp, enabled = !busy)
+            SwitchRow("显示周末", s.showWeekend, { value -> update { it.copy(showWeekend = value) } })
+            SegmentRow("每周第一天", listOf(1 to "周一", 7 to "周日"), s.firstDay, { value -> update { it.copy(firstDay = value) } }, 132.dp)
             SettingRow("课程配色", if (followsBackground) "跟随背景" else null,
                 trailing = { if (!followsBackground) Swatches(paletteColors(data).take(4).map(::hexColor)) }) { sheet = "palette" }
             SettingRow("课前提醒", s.reminderMinutes?.let { "提前 $it 分钟" } ?: "关闭") { sheet = "reminder" }
@@ -79,7 +86,7 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
     when (sheet) {
         "licenses" -> LicensesDialog(close)
         else -> if (data != null) when (sheet) {
-            "name" -> RenameDialog(data.schedule.name, close) { update(data.schedule.copy(name = it)); close() }
+            "name" -> RenameDialog(data.schedule.name, close) { name -> update { it.copy(name = name) }; close() }
             "term" -> TermSheet(data, busy, close) { schedule, preserve, offset -> vm.saveSchedule(schedule, data.timeSlots, preserve, offset) { close() } }
             "palette" -> PaletteSheet(if (followsBackground) FOLLOW_BACKGROUND else data.schedule.colorPalette,
                 background.colors?.lightCourses?.takeIf { background.hasImage }, close) { choice ->
@@ -87,7 +94,7 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
                 if (choice == FOLLOW_BACKGROUND) backgrounds.setCourseTheme(true)
                 else {
                     if (background.settings.courseTheme) backgrounds.setCourseTheme(false)
-                    if (choice != data.schedule.colorPalette) update(data.schedule.copy(colorPalette = choice))
+                    if (choice != data.schedule.colorPalette) update { it.copy(colorPalette = choice) }
                 }
             }
             "reminder" -> ReminderSheet(data.schedule.reminderMinutes, close) { close(); setReminder(it) }

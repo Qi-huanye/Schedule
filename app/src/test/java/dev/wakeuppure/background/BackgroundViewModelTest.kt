@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.net.Uri
 import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
+import dev.wakeuppure.domain.model.BackgroundFocus
 import dev.wakeuppure.ui.background.BackgroundUiState
 import dev.wakeuppure.ui.background.BackgroundViewModel
 import java.io.File
@@ -14,6 +15,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -116,6 +118,29 @@ class BackgroundViewModelTest {
         assertFalse(settled(model()).hasImage)
     }
 
+    @Test fun quickSettingsNeverShowTheBusyStateAndSurviveRestart() = runBlocking {
+        val vm = model()
+        settled(vm)
+        vm.importImage(image())
+        settled(vm)
+        val busy = mutableListOf<Boolean>()
+        val watcher = launch(Dispatchers.Unconfined) { vm.state.collect { busy += it.busy } }
+        vm.previewBlur(0.02f)
+        vm.commitBlur()
+        vm.setFocus(BackgroundFocus.TOP)
+        vm.setImageTheme(false)
+        assertEquals(0.02f, vm.state.value.settings.blur, 0.0001f)
+        assertEquals(BackgroundFocus.TOP, vm.state.value.settings.focus)
+        vm.awaitIdle()
+        watcher.cancel()
+        // A busy flash would insert the progress bar and make the section jump.
+        assertFalse(busy.any { it })
+        val restarted = settled(model())
+        assertEquals(0.02f, restarted.settings.blur, 0.0001f)
+        assertEquals(BackgroundFocus.TOP, restarted.settings.focus)
+        assertFalse(restarted.settings.imageTheme)
+    }
+
     @Test fun corruptPrivateImageDoesNotApplyStaleColorsOnRestart() = runBlocking {
         val vm = model()
         settled(vm)
@@ -150,7 +175,7 @@ class BackgroundViewModelTest {
     private fun model() = BackgroundViewModel(app).also(models::add)
 
     private suspend fun settled(vm: BackgroundViewModel): BackgroundUiState =
-        withTimeout(15_000) { vm.state.first { !it.busy } }
+        withTimeout(15_000) { vm.awaitIdle(); vm.state.first { !it.busy } }
 
     private fun image(): Uri {
         val file = File(app.cacheDir, "background-vm.png")
