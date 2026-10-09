@@ -11,8 +11,6 @@ import dev.wakeuppure.domain.model.BackgroundFocus
 import dev.wakeuppure.domain.model.BackgroundSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -102,20 +100,19 @@ class BackgroundViewModel(application: Application) : AndroidViewModel(applicati
         if (state.value.busy) return
         mutableState.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
-            try {
-                mutableState.value = action().copy(busy = false)
+            val next = try {
+                action().copy(busy = false)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
-                mutableState.update { it.copy(error = failureMessage) }
-            } finally {
-                mutableState.update { it.copy(busy = false) }
-                if (currentCoroutineContext().isActive) {
-                    pendingImage?.let { uri ->
-                        pendingImage = null
-                        importImage(uri)
-                    }
-                }
+                state.value.copy(busy = false, error = failureMessage)
+            }
+            // Publish exactly once: a later write here could clear the busy flag of an action
+            // that started as soon as this one became idle.
+            mutableState.value = next
+            pendingImage?.let { uri ->
+                pendingImage = null
+                importImage(uri)
             }
         }
     }
