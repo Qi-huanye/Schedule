@@ -64,6 +64,22 @@ class AppReleaseRepositoryTest {
         }
     }
 
+    @Test fun buildsCanonicalDownloadUrlsOnlyWithPublishedChecksums() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody(releaseJson(checksum = true)))
+            server.enqueue(MockResponse().setBody(releaseJson()))
+            val repository = AppReleaseRepository(endpoint = server.url("/latest"))
+            val verified = repository.latest()!!
+            assertEquals("Schedule-0.3.0.apk", verified.apkName)
+            assertEquals(100L, verified.apkSize)
+            assertEquals("https://github.com/Qi-huanye/Schedule/releases/download/v0.3.0/Schedule-0.3.0.apk", verified.apkUrl)
+            assertEquals("https://github.com/Qi-huanye/Schedule/releases/download/v0.3.0/SHA256SUMS.txt", verified.checksumUrl)
+            val unverified = repository.latest()!!
+            assertNull(unverified.apkUrl)
+            assertNull(unverified.checksumUrl)
+        }
+    }
+
     @Test fun permitsMissingReleaseNotes() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody(releaseJson(notes = null)))
@@ -119,7 +135,7 @@ class AppReleaseRepositoryTest {
         tag: String = "v0.3.0", notes: String? = "修复课表显示",
         draft: Boolean = false, prerelease: Boolean = false,
         assetName: String = "Schedule-0.3.0.apk", assetState: String = "uploaded",
-        assetSize: Long = 100, noAssets: Boolean = false,
+        assetSize: Long = 100, noAssets: Boolean = false, checksum: Boolean = false,
     ) = buildJsonObject {
         put("tag_name", tag)
         put("body", notes?.let(::JsonPrimitive) ?: JsonNull)
@@ -129,7 +145,9 @@ class AppReleaseRepositoryTest {
         putJsonArray("assets") {
             if (!noAssets) add(buildJsonObject {
                 put("name", assetName); put("state", assetState); put("size", assetSize)
+                put("browser_download_url", "https://untrusted.invalid/$assetName")
             })
+            if (checksum) add(buildJsonObject { put("name", "SHA256SUMS.txt"); put("state", "uploaded"); put("size", 85) })
         }
     }.toString()
 }

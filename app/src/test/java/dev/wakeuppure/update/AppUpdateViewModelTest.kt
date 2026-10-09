@@ -4,7 +4,10 @@ import android.app.Application
 import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
 import dev.wakeuppure.data.update.AppRelease
+import dev.wakeuppure.data.update.ApkDownloader
 import dev.wakeuppure.data.update.ReleaseSource
+import dev.wakeuppure.data.update.UpdateException
+import dev.wakeuppure.ui.update.UpdateDownload
 import dev.wakeuppure.ui.update.AppUpdateViewModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
@@ -15,6 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -40,8 +44,46 @@ class AppUpdateViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun model(source: ReleaseSource = ReleaseSource { calls++; release }): AppUpdateViewModel =
-        AppUpdateViewModel(app, source, { now }, "0.2.0").also { store.put("model-${now}-${System.nanoTime()}", it) }
+    private fun model(source: ReleaseSource = ReleaseSource { calls++; release },
+        downloader: ApkDownloader = ApkDownloader { _, _ -> error("No download expected") }): AppUpdateViewModel =
+        AppUpdateViewModel(app, source, { now }, "0.2.0", downloader).also { store.put("model-${now}-${System.nanoTime()}", it) }
+
+    @Test fun downloadReportsProgressThenBecomesReady() = runTest(dispatcher) {
+        val finished = CompletableDeferred<File>()
+        val vm = model(downloader = ApkDownloader { _, progress -> progress(5, 10); finished.await() })
+        vm.checkForUpdates(manual = true); advanceUntilIdle()
+        vm.download(); runCurrent()
+        assertEquals(UpdateDownload.Running(5, 10), vm.state.value.download)
+        val file = File(app.cacheDir, "Schedule-0.3.0.apk")
+        finished.complete(file); advanceUntilIdle()
+        assertEquals(UpdateDownload.Ready(file), vm.state.value.download)
+        vm.dismissUpdate()
+        assertEquals(UpdateDownload.Idle, vm.state.value.download)
+        assertNull(vm.state.value.release)
+    }
+
+    @Test fun cancelledDownloadIgnoresItsLateResult() = runTest(dispatcher) {
+        val finished = CompletableDeferred<File>()
+        val vm = model(downloader = ApkDownloader { _, _ -> finished.await() })
+        vm.checkForUpdates(manual = true); advanceUntilIdle()
+        vm.download(); runCurrent()
+        vm.cancelDownload()
+        finished.complete(File(app.cacheDir, "late.apk")); advanceUntilIdle()
+        assertEquals(UpdateDownload.Idle, vm.state.value.download)
+        assertEquals(release, vm.state.value.release)
+    }
+
+    @Test fun downloadFailuresKeepTheDialogWithAMessage() = runTest(dispatcher) {
+        var failure: Exception = UpdateException("安装包校验失败，请重试")
+        val vm = model(downloader = ApkDownloader { _, _ -> throw failure })
+        vm.checkForUpdates(manual = true); advanceUntilIdle()
+        vm.download(); advanceUntilIdle()
+        assertEquals(UpdateDownload.Failed("安装包校验失败，请重试"), vm.state.value.download)
+        failure = IOException("reset")
+        vm.download(); advanceUntilIdle()
+        assertEquals(UpdateDownload.Failed("下载失败，请检查网络后重试。"), vm.state.value.download)
+        assertEquals(release, vm.state.value.release)
+    }
 
     @Test fun automaticChecksAreThrottledAcrossRecreation() = runTest(dispatcher) {
         val vm = model()

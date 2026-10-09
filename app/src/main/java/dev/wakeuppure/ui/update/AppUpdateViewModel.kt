@@ -6,20 +6,33 @@ import androidx.lifecycle.viewModelScope
 import dev.wakeuppure.BuildConfig
 import dev.wakeuppure.data.update.AppRelease
 import dev.wakeuppure.data.update.AppReleaseRepository
+import dev.wakeuppure.data.update.ApkDownloader
+import dev.wakeuppure.data.update.UpdateDownloader
+import dev.wakeuppure.data.update.UpdateException
 import dev.wakeuppure.data.update.ReleaseSource
 import dev.wakeuppure.data.update.isNewerVersion
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
+
+sealed interface UpdateDownload {
+    data object Idle : UpdateDownload
+    data class Running(val read: Long, val total: Long) : UpdateDownload
+    data class Ready(val file: File) : UpdateDownload
+    data class Failed(val message: String) : UpdateDownload
+}
 
 data class AppUpdateState(
     val autoCheckEnabled: Boolean = true,
     val checking: Boolean = false,
     val release: AppRelease? = null,
     val message: String? = null,
+    val download: UpdateDownload = UpdateDownload.Idle,
 )
 
 class AppUpdateViewModel(
@@ -27,6 +40,7 @@ class AppUpdateViewModel(
     private val source: ReleaseSource,
     private val now: () -> Long,
     private val currentVersion: String,
+    private val downloader: ApkDownloader = UpdateDownloader(application),
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(application, AppReleaseRepository(), System::currentTimeMillis, BuildConfig.VERSION_NAME)
 
@@ -35,6 +49,11 @@ class AppUpdateViewModel(
     val state = mutableState.asStateFlow()
     private var checkJob: Job? = null
     private var automaticRequest = false
+    private var downloadJob: Job? = null
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) { downloader.clean() }
+    }
 
     fun checkForUpdates(manual: Boolean = false) {
         if (state.value.checking) return
@@ -75,7 +94,33 @@ class AppUpdateViewModel(
     }
 
     fun dismissUpdate() {
-        mutableState.update { it.copy(release = null) }
+        downloadJob?.cancel()
+        mutableState.update { it.copy(release = null, download = UpdateDownload.Idle) }
+    }
+
+    fun download() {
+        val release = state.value.release ?: return
+        if (state.value.download is UpdateDownload.Running) return
+        mutableState.update { it.copy(download = UpdateDownload.Running(0, release.apkSize)) }
+        downloadJob = viewModelScope.launch {
+            val result = try {
+                UpdateDownload.Ready(downloader.download(release) { read, total ->
+                    mutableState.update { if (it.download is UpdateDownload.Running) it.copy(download = UpdateDownload.Running(read, total)) else it }
+                })
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: UpdateException) {
+                UpdateDownload.Failed(e.message ?: DOWNLOAD_FAILED)
+            } catch (_: Exception) {
+                UpdateDownload.Failed(DOWNLOAD_FAILED)
+            }
+            mutableState.update { it.copy(download = result) }
+        }
+    }
+
+    fun cancelDownload() {
+        downloadJob?.cancel()
+        mutableState.update { it.copy(download = UpdateDownload.Idle) }
     }
 
     fun skipVersion() {
@@ -86,5 +131,6 @@ class AppUpdateViewModel(
 
     private companion object {
         const val CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
+        const val DOWNLOAD_FAILED = "下载失败，请检查网络后重试。"
     }
 }

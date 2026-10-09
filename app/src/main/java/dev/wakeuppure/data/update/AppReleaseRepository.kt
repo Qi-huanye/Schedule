@@ -18,7 +18,16 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-data class AppRelease(val version: String, val notes: String, val pageUrl: String)
+/**
+ * [apkUrl] and [checksumUrl] are built from the canonical repository like [pageUrl]; they are null
+ * when the release lacks a SHA256SUMS.txt asset, in which case only the browser download is offered.
+ */
+data class AppRelease(
+    val version: String, val notes: String, val pageUrl: String,
+    val apkName: String? = null, val apkSize: Long = 0, val apkUrl: String? = null, val checksumUrl: String? = null,
+)
+
+internal const val CHECKSUM_ASSET = "SHA256SUMS.txt"
 
 fun interface ReleaseSource {
     suspend fun latest(): AppRelease?
@@ -76,14 +85,21 @@ class AppReleaseRepository(
         } catch (e: SerializationException) {
             throw IOException("Invalid release response", e)
         }
-        if (release.draft || release.prerelease || versionParts(release.tag) == null ||
-            release.assets.none { it.name.endsWith(".apk", ignoreCase = true) && it.state == "uploaded" && it.size > 0 }
-        ) return null
+        fun GitHubAsset.available() = state == "uploaded" && size > 0
+        val apk = release.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) && it.available() }
+        if (release.draft || release.prerelease || versionParts(release.tag) == null || apk == null) return null
+        val checksum = release.assets.firstOrNull { it.name == CHECKSUM_ASSET && it.available() }
+        fun download(name: String) = "https://github.com/Qi-huanye/Schedule/releases/download/".toHttpUrl()
+            .newBuilder().addPathSegment(release.tag).addPathSegment(name).build().toString()
         return AppRelease(
             version = release.tag.removePrefix("v"),
             notes = release.body.orEmpty().trim(),
             pageUrl = "https://github.com/Qi-huanye/Schedule/releases/tag/".toHttpUrl()
                 .newBuilder().addPathSegment(release.tag).build().toString(),
+            apkName = apk.name.takeIf { checksum != null },
+            apkSize = apk.size,
+            apkUrl = checksum?.let { download(apk.name) },
+            checksumUrl = checksum?.let { download(it.name) },
         )
     }
 }

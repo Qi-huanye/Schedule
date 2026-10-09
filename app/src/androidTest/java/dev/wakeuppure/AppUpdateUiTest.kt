@@ -37,6 +37,34 @@ class AppUpdateUiTest {
         compose.runOnIdle { assertTrue(opened) }
     }
 
+    @Test fun downloadStatesOfferCancelRetryBrowserAndInstall() {
+        val downloadable = release.copy(apkName = "Schedule-0.3.0.apk", apkUrl = "https://github.com/a.apk", checksumUrl = "https://github.com/s.txt")
+        var download by mutableStateOf<UpdateDownload>(UpdateDownload.Idle)
+        var canInstall by mutableStateOf(true)
+        val clicks = mutableListOf<String>()
+        compose.setContent {
+            MaterialTheme {
+                AppUpdateDialog(downloadable, { clicks += "dismiss" }, { clicks += "skip" }, { clicks += "update" }, download, canInstall,
+                    { clicks += "cancel" }, { clicks += "browser" }, { clicks += "install" })
+            }
+        }
+        compose.onNodeWithText("更新").performClick()
+        compose.runOnIdle { download = UpdateDownload.Running(6_400_000, 12_800_000) }
+        compose.onNodeWithText("6.1 / 12.2 MB").assertIsDisplayed()
+        compose.onNodeWithText("稍后").assertDoesNotExist()
+        compose.onNodeWithText("取消").performClick()
+        compose.runOnIdle { download = UpdateDownload.Failed("安装包校验失败，请重试") }
+        compose.onNodeWithText("安装包校验失败，请重试").assertIsDisplayed()
+        compose.onNodeWithText("重试").performClick()
+        compose.onNodeWithText("浏览器下载").performClick()
+        compose.runOnIdle { download = UpdateDownload.Ready(java.io.File("Schedule-0.3.0.apk")); canInstall = false }
+        compose.onNodeWithText("需要允许 Schedule 安装应用").assertIsDisplayed()
+        compose.onNodeWithText("去设置").performClick()
+        compose.runOnIdle { canInstall = true }
+        compose.onNodeWithText("安装").performClick()
+        compose.runOnIdle { assertEquals(listOf("update", "cancel", "update", "browser", "install", "install"), clicks) }
+    }
+
     @Test fun disablingAutomaticChecksKeepsManualButtonAvailable() {
         var state by mutableStateOf(AppUpdateState())
         var checked = false
