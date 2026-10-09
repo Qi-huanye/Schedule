@@ -59,19 +59,19 @@ class BackgroundUiTest {
         compose.onNodeWithTag("app_background_image").assertExists()
         compose.runOnIdle {
             assertEquals(state.colors!!.light.primary, observedPrimary)
-            assertEquals(Color(0xFF123456), observedCourse)
+            assertEquals(Color(0xFF123456).copy(alpha = cardAlpha(state)), observedCourse)
             assertNull(observedPalette)
         }
         // Course colors follow the image from the palette sheet; the section only renders the result.
         compose.runOnIdle { state = state.copy(settings = state.settings.copy(courseTheme = true)) }
         compose.runOnIdle {
             assertEquals(state.colors!!.light.primary, observedPrimary)
-            assertEquals(Color(state.colors!!.lightCourses[1]), observedCourse)
+            assertEquals(Color(state.colors!!.lightCourses[1]).copy(alpha = cardAlpha(state)), observedCourse)
         }
         compose.onNodeWithText("主题跟随背景").performScrollTo().performClick().assertIsOff()
         compose.runOnIdle { assertEquals(state.colors!!.lightCourses, observedPalette) }
         compose.runOnIdle { state = state.copy(settings = state.settings.copy(courseTheme = false)) }
-        compose.runOnIdle { assertEquals(Color(0xFF123456), observedCourse) }
+        compose.runOnIdle { assertEquals(Color(0xFF123456).copy(alpha = cardAlpha(state)), observedCourse) }
         compose.onNodeWithText("移除").performScrollTo().performClick()
         compose.onNodeWithTag("app_background_image").assertDoesNotExist()
         compose.onNodeWithText("未设置").assertIsDisplayed()
@@ -129,7 +129,8 @@ class BackgroundUiTest {
         }
         compose.runOnIdle {
             val (base, ink) = requireNotNull(displayed)
-            assertEquals(1f, base.alpha, 0f)
+            // Cards keep the layer opacity; the text contrast below is measured against the opaque course color.
+            assertEquals(cardAlpha(state), base.alpha, 0.01f)
             val light = maxOf(base.luminance(), ink.luminance())
             val dark = minOf(base.luminance(), ink.luminance())
             assertTrue((light + 0.05f) / (dark + 0.05f) >= 4.5f)
@@ -137,6 +138,8 @@ class BackgroundUiTest {
         }
         compose.runOnIdle { assertEquals(Color(0x00FFFFFF), displayed!!.first) }
     }
+
+    private fun cardAlpha(state: BackgroundUiState) = BackgroundLayers.of(state.settings.blur).course
 
     private fun imageState(): BackgroundUiState {
         val seed = 0xFF277D63.toInt()

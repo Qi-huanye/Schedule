@@ -71,7 +71,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 调试 APK 使用本机调试密钥。正式发布由 GitHub Actions 完成签名，密钥不进入仓库；配置与流程见 [发布维护](docs/RELEASING.md)。
 
 本次生成的 APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。
-2026-10-08 开发版已在 Android 36 模拟器安装运行；Debug / Release 各 132 项单元
+0.3.0 已在 Android 36 模拟器与 HarmonyOS 4.2 真机安装运行；Debug / Release 各 140 项单元
 测试通过；设备检查范围与外部兼容性限制见验证记录。构建、签名、需求核对及外部待验证项见
 [验证记录](docs/VERIFICATION.md)。
 
