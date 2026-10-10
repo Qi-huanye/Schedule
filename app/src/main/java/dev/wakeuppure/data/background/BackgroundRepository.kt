@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
 import android.util.AtomicFile
+import android.util.Size
 import androidx.exifinterface.media.ExifInterface
 import dev.wakeuppure.domain.model.BackgroundFocus
 import dev.wakeuppure.domain.model.BackgroundSettings
@@ -30,6 +31,7 @@ class BackgroundRepository(context: Context) {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
     private val directory = File(appContext.filesDir, "backgrounds")
+    private val displayCache = BackgroundDisplayCache(appContext)
 
     /** Reads only the small settings record and file metadata; image decoding is asynchronous. */
     fun load(): BackgroundSettings = synchronized(settingsLock) { loadLocked() }
@@ -37,11 +39,23 @@ class BackgroundRepository(context: Context) {
     suspend fun restore(): BackgroundSettings = withContext(Dispatchers.IO) {
         imageOperations.withLock {
             reclaimOrphans()
-            load()
+            val settings = load()
+            val colors = settings.colors ?: return@withLock settings
+            if (colors.clustersComputed || colors.clusters.isNotEmpty()) return@withLock settings
+            // Legacy course colors must come from the whole photo, not its current display crop.
+            // Persist even an empty result, so grayscale photos do not decode on every launch.
+            val source = imageFile(settings.imageName) ?: return@withLock settings
+            val original = decodeBounded(source)
+            val migrated = try { settings.copy(colors = withClusters(colors, original)) }
+                finally { original.recycle() }
+            currentCoroutineContext().ensureActive()
+            try { synchronized(settingsLock) { persistLocked(migrated) } }
+            catch (_: IOException) { /* The palette is still usable if this optional migration cannot be saved. */ }
+            migrated
         }
     }
 
-    suspend fun importImage(uri: Uri): BackgroundSettings = withContext(Dispatchers.IO) {
+    suspend fun importImage(uri: Uri, displaySize: Size = defaultDisplaySize()): BackgroundSettings = withContext(Dispatchers.IO) {
         imageOperations.withLock {
             currentCoroutineContext().ensureActive()
             reclaimOrphans()
@@ -59,8 +73,9 @@ class BackgroundRepository(context: Context) {
                 val colors = extractColors(normalized)
                 val destination = File(directory, "${UUID.randomUUID()}.png").also { normalizedFile = it }
                 writeImage(normalized, destination)
+                displayCache.prepare(destination, normalized, displaySize, load().focus)
                 currentCoroutineContext().ensureActive()
-                synchronized(settingsLock) {
+                val saved = synchronized(settingsLock) {
                     val previous = loadLocked()
                     val next = previous.copy(imageName = destination.name, colors = colors)
                     persistLocked(next)
@@ -68,10 +83,15 @@ class BackgroundRepository(context: Context) {
                     imageFile(previous.imageName)?.delete()
                     next
                 }
+                displayCache.retainVariant(destination, displaySize, saved.focus)
+                saved
             } finally {
                 bitmap?.recycle()
                 source.delete()
-                if (!committed) normalizedFile?.let { AtomicFile(it).delete() }
+                if (!committed) normalizedFile?.let {
+                    AtomicFile(it).delete()
+                    displayCache.removeSource(it.name)
+                }
             }
         }
     }
@@ -104,7 +124,17 @@ class BackgroundRepository(context: Context) {
         }
     }
 
-    suspend fun readBitmap(settings: BackgroundSettings): Bitmap? {
+    /** Full normalized source, for operations which need uncropped image content. */
+    suspend fun readBitmap(settings: BackgroundSettings): Bitmap? = readBitmap(settings, null)
+
+    /** The app's display path: a raw hit does not enter BitmapFactory at all. */
+    suspend fun readDisplayBitmap(settings: BackgroundSettings, size: Size): Bitmap? = readBitmap(settings, size)
+
+    fun defaultDisplaySize(): Size = appContext.resources.displayMetrics.let {
+        Size(it.widthPixels.coerceAtLeast(1), it.heightPixels.coerceAtLeast(1))
+    }
+
+    private suspend fun readBitmap(settings: BackgroundSettings, size: Size?): Bitmap? {
         // Keep ownership until the dispatch back to the caller succeeds, including cancellation.
         var bitmap: Bitmap? = null
         return try {
@@ -113,8 +143,13 @@ class BackgroundRepository(context: Context) {
                     val file = imageFile(settings.imageName)
                     if (!settings.hasImage || file?.isFile != true) return@withLock null
                     currentCoroutineContext().ensureActive()
-                    bitmap = decodeBounded(file)
+                    bitmap = if (size == null) decodeBounded(file)
+                    else displayCache.read(file, size, settings.focus, ::decodeBounded)
                     currentCoroutineContext().ensureActive()
+                    val current = load()
+                    if (size != null && settings.imageName == current.imageName && settings.focus == current.focus) {
+                        displayCache.retainVariant(file, size, settings.focus)
+                    }
                     bitmap
                 }
             }
@@ -152,6 +187,7 @@ class BackgroundRepository(context: Context) {
     /** Called with imageOperations held so active imports never appear to be orphans. */
     private suspend fun reclaimOrphans() {
         currentCoroutineContext().ensureActive()
+        displayCache.retainSource(load().imageName)
         val privateDirectory = privateDirectory() ?: return
         if (!privateDirectory.isDirectory) return
         val referencedName = synchronized(settingsLock) {
@@ -298,8 +334,8 @@ class BackgroundRepository(context: Context) {
 
     /** Colors saved by builds before k-means lack clusters; derive them from the stored image. */
     fun withClusters(colors: ImageColors, bitmap: Bitmap): ImageColors =
-        if (colors.clusters.isNotEmpty()) colors
-        else colors.copy(clusters = HctKMeans.clusters(samplePixels(bitmap)).take(MAX_CLUSTERS))
+        if (colors.clustersComputed || colors.clusters.isNotEmpty()) colors
+        else colors.copy(clusters = HctKMeans.clusters(samplePixels(bitmap)).take(MAX_CLUSTERS), clustersComputed = true)
 
     private fun samplePixels(bitmap: Bitmap): IntArray {
         val scale = minOf(1.0, SAMPLE_SIZE.toDouble() / max(bitmap.width, bitmap.height))
@@ -320,7 +356,7 @@ class BackgroundRepository(context: Context) {
 
     private fun extractColors(bitmap: Bitmap): ImageColors {
         val extracted = ImageColorExtractor.extract(samplePixels(bitmap))
-        return extracted.copy(accents = extracted.accents.take(MAX_ACCENTS), clusters = extracted.clusters.take(MAX_CLUSTERS)).also {
+        return extracted.copy(accents = extracted.accents.take(MAX_ACCENTS), clusters = extracted.clusters.take(MAX_CLUSTERS), clustersComputed = true).also {
             if (!validColors(it)) throw IOException("无法生成图片配色")
         }
     }

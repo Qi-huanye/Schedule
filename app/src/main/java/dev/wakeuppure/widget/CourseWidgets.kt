@@ -25,10 +25,14 @@ class NextWidget : TodayWidget()
 object WidgetUpdater {
     suspend fun refresh(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
+        val instances = listOf(TodayWidget::class.java, NextWidget::class.java).mapNotNull { type ->
+            manager.getAppWidgetIds(ComponentName(context, type)).takeIf { it.isNotEmpty() }?.let { type to it }
+        }
+        if (instances.isEmpty()) return
         val data = (context.applicationContext as PureApp).repository.snapshot().let { all -> all.firstOrNull { it.schedule.current } ?: all.firstOrNull() }
         val now = LocalDateTime.now()
         val intent = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        listOf(TodayWidget::class.java, NextWidget::class.java).forEach { type ->
+        instances.forEach { (type, ids) ->
             val next = type == NextWidget::class.java
             val content = if (data == null) "还没有课表" else if (next) {
                 CourseFilter.next(data, now)?.let { "${it.course.name}\n${it.date}  ${it.start.toLocalTime()} - ${it.end.toLocalTime()}\n${it.classroom}" } ?: "本学期没有后续课程"
@@ -38,7 +42,7 @@ object WidgetUpdater {
                 setTextViewText(R.id.widget_body, content)
                 setOnClickPendingIntent(R.id.widget_root, intent)
             }
-            manager.getAppWidgetIds(ComponentName(context, type)).forEach { manager.updateAppWidget(it, views) }
+            ids.forEach { manager.updateAppWidget(it, views) }
         }
     }
 }

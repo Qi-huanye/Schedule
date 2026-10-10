@@ -3,5 +3,14 @@
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:colorAccent">#15756C</item>
+        <!-- The frame after the starting window is dismissed: match it so nothing flashes between. -->
+        <item name="android:windowBackground">@color/splash_background</item>
+    </style>
+
+    <!-- Held by the system from launch until MainActivity says the first screen is ready. -->
+    <style name="Theme.Schedule.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="postSplashScreenTheme">@style/AppTheme</item>
     </style>
 </resources>

@@ -11,8 +11,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.*
 import dev.wakeuppure.domain.model.*
@@ -27,18 +30,30 @@ import java.time.LocalDateTime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = viewModel(), backgrounds: BackgroundViewModel = viewModel()) {
-    val all by vm.schedules.collectAsState()
-    val data = all.firstOrNull { it.schedule.current } ?: all.firstOrNull()
-    val appearance by vm.appearance.collectAsState()
-    val error by vm.error.collectAsState()
-    val busy by vm.busy.collectAsState()
-    val backgroundState by backgrounds.state.collectAsStateWithLifecycle()
+fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = null,
+    backgrounds: BackgroundViewModel = viewModel(), onContentReady: () -> Unit = {}) {
+    val opening by remember(vm, backgrounds) { startupState(vm, backgrounds) }.collectAsStateWithLifecycle(initialValue = null)
+    // Register before the readiness gate: Android can restore a pending image-picker result here.
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(backgrounds::importImage)
     }
+    val state = opening
+    if (state == null) {
+        Box(Modifier.fillMaxSize().onSizeChanged { backgrounds.setViewport(it.width, it.height) })
+        return
+    }
+    val all = state.schedules.schedules
+    val data = all.firstOrNull { it.schedule.current } ?: all.firstOrNull()
+    val appearance = state.appearance
+    val error by vm.error.collectAsState()
+    val busy by vm.busy.collectAsState()
+    val backgroundState = state.background
+    val owner = requireNotNull(LocalViewModelStoreOwner.current)
+    var firstFrameDrawn by remember { mutableStateOf(false) }
+    if (!firstFrameDrawn) AfterFirstDraw { firstFrameDrawn = true }
     var now by remember { mutableStateOf(LocalDateTime.now()) }
     LaunchedEffect(Unit) { while (true) { now = LocalDateTime.now(); delay(30_000) } }
+    LaunchedEffect(now.toLocalDate()) { vm.setDate(now.toLocalDate()) }
     var editCourse by remember { mutableStateOf<CourseWithPeriods?>(null) }
     var detail by remember { mutableStateOf<CourseWithPeriods?>(null) }
     var creating by remember { mutableStateOf(false) }
@@ -48,7 +63,9 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = view
     val createSchedule = { creating = true }
     val openTransfer = { nav.navigate("transfer") }
     PureTheme(appearance, backgroundState) {
-        Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) {
+        Surface(Modifier.fillMaxSize().onSizeChanged { backgrounds.setViewport(it.width, it.height) }
+            .onGloballyPositioned { onContentReady() },
+            color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) {
             Scaffold(containerColor = Color.Transparent, bottomBar = {
                 if (route in listOf("timetable", "today", "mine")) NavigationBar(containerColor = backgroundChromeColor(MaterialTheme.colorScheme.surfaceContainer)) {
                     listOf(Triple("timetable", "课表", Icons.Default.CalendarMonth), Triple("today", "今日", Icons.Default.Today), Triple("mine", "我的", Icons.Default.PersonOutline)).forEach { (id, label, icon) ->
@@ -62,11 +79,15 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = view
                 NavHost(nav, startDestination = "timetable", modifier = Modifier.padding(padding).consumeWindowInsets(padding)) {
                     composable("timetable") {
                         if (data == null) EmptySchedule(createSchedule, openTransfer)
-                        else TimetableScreen(data, all, now, { detail = it }, { editCourse = it; nav.navigate("course") }, vm::select, createSchedule, openTransfer)
+                        else TimetableScreen(requireNotNull(state.schedules.timetable), all, now, { detail = it }, { editCourse = it; nav.navigate("course") }, vm::select, createSchedule, openTransfer,
+                            prefetchEnabled = firstFrameDrawn)
                     }
-                    composable("today") { if (data == null) EmptySchedule(createSchedule, openTransfer) else TodayScreen(data, now) { detail = it } }
+                    composable("today") {
+                        if (data == null) EmptySchedule(createSchedule, openTransfer) else TodayScreen(data, now) { detail = it }
+                    }
                     composable("mine") {
-                        MineScreen(vm, data, appearance, backgrounds, updates, { imagePicker.launch(arrayOf("image/*")) },
+                        val settingsUpdates = updates ?: viewModel<AppUpdateViewModel>(viewModelStoreOwner = owner)
+                        MineScreen(vm, data, appearance, backgrounds, settingsUpdates, { imagePicker.launch(arrayOf("image/*")) },
                             { nav.navigate("times") }, openTransfer, createSchedule)
                     }
                     composable("course") {
@@ -80,7 +101,7 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel = view
             detail?.let { item -> CourseDetailSheet(item, data?.timeSlots.orEmpty(), { detail = null }) { editCourse = item; detail = null; nav.navigate("course") } }
             if (creating) NewScheduleSheet(busy, { creating = false }) { schedule -> vm.saveSchedule(schedule, defaultTimeSlots()) { creating = false } }
             error?.let { AlertDialog(onDismissRequest = { vm.error.value = null }, title = { Text("操作未完成") }, text = { Text(it) }, confirmButton = { TextButton(onClick = { vm.error.value = null }) { Text("知道了") } }) }
-            AppUpdateHost(updates)
+            if (firstFrameDrawn) AppUpdateHost(updates ?: viewModel(viewModelStoreOwner = owner))
         }
     }
 }

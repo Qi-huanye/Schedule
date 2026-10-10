@@ -16,7 +16,7 @@ import dev.wakeuppure.ui.background.BackgroundUiState
 @Composable
 fun PureTheme(mode: String, background: BackgroundUiState? = null, content: @Composable () -> Unit) {
     val dark = mode == "dark" || (mode == "system" && isSystemInDarkTheme())
-    val imageColors = background?.colors?.takeIf { background.hasImage && background.settings.imageTheme }
+    val imageColors = background?.colors?.takeIf { background.themeReady && background.settings.imageTheme }
     val colors = if (imageColors != null) {
         if (dark) imageColors.dark else imageColors.light
     } else if (Build.VERSION.SDK_INT >= 31) {

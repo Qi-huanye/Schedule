@@ -4,6 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.wakeuppure.PureApp
+import dev.wakeuppure.data.local.ScheduleCache
+import dev.wakeuppure.data.local.PreparedTimetable
+import dev.wakeuppure.data.local.TimetableCache
 import dev.wakeuppure.data.repository.ScheduleRepository
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.data.wakeup.json.WakeUpJsonImporter
@@ -18,18 +21,50 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.time.LocalDate
 
-class PureViewModel(application: Application, val repository: ScheduleRepository) : AndroidViewModel(application) {
+data class PreparedScheduleState(val schedules: List<ScheduleData>, val timetable: PreparedTimetable?)
+
+class PureViewModel(
+    application: Application,
+    val repository: ScheduleRepository,
+    private val cache: ScheduleCache = ScheduleCache(application),
+    private val timetableCache: TimetableCache = TimetableCache(application),
+) : AndroidViewModel(application) {
     constructor(application: Application) : this(application, (application as PureApp).repository)
-    private val stored = repository.schedules.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    // null means "not known yet": an empty list is a real answer the screen must act on, so the two
+    // sources stay distinct until each has reported.
+    private val cached = MutableStateFlow<List<ScheduleData>?>(null)
+    private val reported = MutableStateFlow<List<ScheduleData>?>(null)
+    /** What the database last reported, falling back to the cached snapshot until it answers. */
+    private val stored: Flow<List<ScheduleData>?> = combine(cached, reported) { disk, database ->
+        database ?: disk?.takeIf { it.isNotEmpty() }
+    }
+
     private class Edit(val change: (Schedule) -> Schedule)
+
     // Quick setting changes shown on top of the stored data until the database reports them.
     private val pendingEdits = MutableStateFlow<Map<Long, List<Edit>>>(emptyMap())
-    val schedules = combine(stored, pendingEdits) { list, edits ->
+    private val resolved = combine(stored, pendingEdits) { list, edits ->
+        if (list == null) return@combine null
         if (edits.isEmpty()) list else list.map { data ->
             edits[data.schedule.id]?.let { pending -> data.copy(schedule = pending.fold(data.schedule) { s, edit -> edit.change(s) }) } ?: data
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val schedules = resolved.map { it.orEmpty() }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    // An empty snapshot is not an answer until Room has confirmed it.
+    val loaded = resolved.map { it != null }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val date = MutableStateFlow(LocalDate.now())
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val screenState = combine(resolved, date) { list, day -> list to day }
+        .mapLatest { (list, day) ->
+            if (list == null) null else {
+                val current = list.firstOrNull { it.schedule.current } ?: list.firstOrNull()
+                PreparedScheduleState(list, current?.let { timetableCache.prepare(it, day) })
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun setDate(value: LocalDate) { date.value = value }
     // Every database write runs one at a time in call order: viewModelScope starts coroutines on the
     // main thread right away, so the fair mutex queues them as they were requested.
     private val writes = Mutex()
@@ -42,6 +77,16 @@ class PureViewModel(application: Application, val repository: ScheduleRepository
     val experimentalToken = MutableStateFlow(prefs.getBoolean("experimentalToken", false))
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; prettyPrint = true }
     private val shares = WakeUpShareRepository(WakeUpTokenImporter(AndroidDeviceIdentityProvider(application)))
+
+    init {
+        viewModelScope.launch { cached.value = withContext(Dispatchers.IO) { cache.load() } }
+        viewModelScope.launch {
+            repository.schedules.collect { list ->
+                reported.value = list
+                withContext(Dispatchers.IO) { cache.save(list) }
+            }
+        }
+    }
 
     fun setAppearance(value: String) { appearance.value = value; prefs.edit().putString("appearance", value).apply() }
     fun setExperimentalToken(value: Boolean) {
@@ -76,7 +121,7 @@ class PureViewModel(application: Application, val repository: ScheduleRepository
                 // Keep showing the edit until the observed data includes it, so the control never
                 // flips back to its old value in between.
                 withTimeoutOrNull(2_000) {
-                    stored.first { list -> list.find { it.schedule.id == id }?.schedule?.let { sameSettings(change(it), it) } ?: true }
+                    stored.first { list -> list?.find { it.schedule.id == id }?.schedule?.let { sameSettings(change(it), it) } ?: true }
                 }
             } catch (e: CancellationException) {
                 throw e

@@ -7,7 +7,13 @@ import kotlinx.serialization.Serializable
  * image's chromatic pixels, largest first, used to fill course colors with hues the photo has.
  */
 @Serializable
-data class ImageColors(val seed: Int, val accents: List<Int>, val clusters: List<Int> = emptyList())
+data class ImageColors(
+    val seed: Int,
+    val accents: List<Int>,
+    val clusters: List<Int> = emptyList(),
+    /** Distinguish a migrated grayscale photo (no chromatic clusters) from legacy metadata. */
+    val clustersComputed: Boolean = false,
+)
 
 /** Which part of a cropped photo stays visible, so faces can move out of the timetable. */
 @Serializable

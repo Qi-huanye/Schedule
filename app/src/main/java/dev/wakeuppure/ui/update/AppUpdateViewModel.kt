@@ -37,12 +37,15 @@ data class AppUpdateState(
 
 class AppUpdateViewModel(
     application: Application,
-    private val source: ReleaseSource,
+    source: ReleaseSource?,
     private val now: () -> Long,
     private val currentVersion: String,
-    private val downloader: ApkDownloader = UpdateDownloader(application),
+    downloader: ApkDownloader? = null,
 ) : AndroidViewModel(application) {
-    constructor(application: Application) : this(application, AppReleaseRepository(), System::currentTimeMillis, BuildConfig.VERSION_NAME)
+    constructor(application: Application) : this(application, null, System::currentTimeMillis, BuildConfig.VERSION_NAME)
+
+    private val releases by lazy { source ?: AppReleaseRepository() }
+    private val downloads by lazy { downloader ?: UpdateDownloader(application) }
 
     private val preferences = application.getSharedPreferences("app_updates", 0)
     private val mutableState = MutableStateFlow(AppUpdateState(autoCheckEnabled = preferences.getBoolean("automatic", true)))
@@ -50,12 +53,17 @@ class AppUpdateViewModel(
     private var checkJob: Job? = null
     private var automaticRequest = false
     private var downloadJob: Job? = null
+    private var cleanupJob: Job? = null
 
-    init {
-        viewModelScope.launch(Dispatchers.IO) { downloader.clean() }
+    private fun prepare() {
+        if (cleanupJob == null) cleanupJob = viewModelScope.launch(Dispatchers.IO) {
+            runCatching { downloads.clean() }
+        }
     }
 
     fun checkForUpdates(manual: Boolean = false) {
+        // The automatic host mounts after the first draw. Manual checks also prepare on demand.
+        prepare()
         if (state.value.checking) return
         val timestamp = now()
         val elapsed = timestamp - preferences.getLong("last_attempt", 0)
@@ -66,7 +74,7 @@ class AppUpdateViewModel(
         mutableState.update { it.copy(checking = true, message = null) }
         checkJob = viewModelScope.launch {
             try {
-                val release = source.latest()
+                val release = kotlinx.coroutines.withContext(Dispatchers.IO) { releases.latest() }
                 val newer = release != null && isNewerVersion(release.version, currentVersion)
                 val skipped = release?.version?.substringBefore('+') == preferences.getString("skipped_version", null)
                 mutableState.update { state ->
@@ -101,10 +109,13 @@ class AppUpdateViewModel(
     fun download() {
         val release = state.value.release ?: return
         if (state.value.download is UpdateDownload.Running) return
+        prepare()
         mutableState.update { it.copy(download = UpdateDownload.Running(0, release.apkSize)) }
         downloadJob = viewModelScope.launch {
             val result = try {
-                UpdateDownload.Ready(downloader.download(release) { read, total ->
+                // Cleanup must never remove a file that this download has just started writing.
+                cleanupJob?.join()
+                UpdateDownload.Ready(downloads.download(release) { read, total ->
                     mutableState.update { if (it.download is UpdateDownload.Running) it.copy(download = UpdateDownload.Running(read, total)) else it }
                 })
             } catch (e: CancellationException) {

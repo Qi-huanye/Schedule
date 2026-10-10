@@ -19,3 +19,6 @@ release/
 .env
 .env.*
 signing.properties
+
+# Local implementation notes (not published)
+/docs/local/

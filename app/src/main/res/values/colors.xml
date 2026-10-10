@@ -1,0 +1,4 @@
+<resources>
+    <!-- Must match the app's own background so the handoff from the starting window is invisible. -->
+    <color name="splash_background">#F7FAF8</color>
+</resources>
