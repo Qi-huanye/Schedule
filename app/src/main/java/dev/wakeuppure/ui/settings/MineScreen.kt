@@ -32,17 +32,21 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
     val busy by vm.busy.collectAsState()
     val theme by vm.themeSettings.collectAsState()
     var sheet by remember { mutableStateOf<String?>(null) }
-    var pendingReminder by remember { mutableStateOf<Int?>(null) }
+    var pendingReminder by remember { mutableStateOf<Pair<Int?, Int?>?>(null) }
     // Each quick change applies only its own field to the latest stored schedule, so rapid changes never overwrite each other.
     fun update(change: (Schedule) -> Schedule) { data?.let { vm.updateSchedule(it.schedule.id, change) } }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        val minutes = pendingReminder
-        if (granted) update { it.copy(reminderMinutes = minutes) } else vm.error.value = "通知权限未开启"
+        val choice = pendingReminder
+        if (granted && choice != null) update { it.copy(reminderMinutes = choice.first, todoReminderMinutes = choice.second) }
+        else if (!granted) vm.error.value = "通知权限未开启"
+        pendingReminder = null
     }
-    fun setReminder(minutes: Int?) {
+    fun setReminder(courseMinutes: Int?, todoMinutes: Int?) {
         if (data == null) return
-        if (minutes != null && Build.VERSION.SDK_INT >= 33) { pendingReminder = minutes; permission.launch(Manifest.permission.POST_NOTIFICATIONS) }
-        else update { it.copy(reminderMinutes = minutes) }
+        if ((courseMinutes != null || todoMinutes != null) && Build.VERSION.SDK_INT >= 33) {
+            pendingReminder = courseMinutes to todoMinutes
+            permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else update { it.copy(reminderMinutes = courseMinutes, todoReminderMinutes = todoMinutes) }
     }
     val followsBackground = background.hasImage && background.settings.courseTheme
     // The photo remains visible between independent setting cards, as on Today.
@@ -60,7 +64,7 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
                 SegmentRow("每周第一天", listOf(1 to "周一", 7 to "周日"), s.firstDay, { value -> update { it.copy(firstDay = value) } }, 132.dp)
                 SettingRow("课程配色", if (followsBackground) "跟随背景" else null,
                     trailing = { if (!followsBackground) Swatches(paletteColors(data).take(4).map(::hexColor)) }) { sheet = "palette" }
-                SettingRow("课前提醒", s.reminderMinutes?.let { "提前 $it 分钟" } ?: "关闭") { sheet = "reminder" }
+                SettingRow("提醒", if (s.reminderMinutes == null && s.todoReminderMinutes == null) "关闭" else "课程与待办") { sheet = "reminder" }
                 SettingRow("新建课表", onClick = onNewSchedule)
                 SettingRow("删除此课表", titleColor = MaterialTheme.colorScheme.error, chevron = false, onClick = { sheet = "delete" })
             }
@@ -112,9 +116,9 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
                     if (choice != data.schedule.colorPalette) update { it.copy(colorPalette = choice) }
                 }
             }
-            "reminder" -> ReminderSheet(data.schedule.reminderMinutes, close) { close(); setReminder(it) }
+            "reminder" -> ReminderSheet(data.schedule.reminderMinutes, data.schedule.todoReminderMinutes, close) { course, todo -> close(); setReminder(course, todo) }
             "delete" -> AlertDialog(onDismissRequest = close, title = { Text("删除 ${data.schedule.name}？") },
-                text = { Text("该课表及其所有课程将被删除。") },
+                text = { Text("该课表及其所有课程和待办将被删除。") },
                 confirmButton = { TextButton(onClick = { close(); vm.deleteSchedule(data.schedule.id) }) { Text("删除") } },
                 dismissButton = { TextButton(onClick = close) { Text("取消") } })
         }
