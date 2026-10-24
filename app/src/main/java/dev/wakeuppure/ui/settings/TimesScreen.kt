@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package dev.wakeuppure.ui.settings
 
 import androidx.compose.foundation.layout.*
@@ -11,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.domain.usecase.FixedLessonTime
 import dev.wakeuppure.domain.usecase.TimeSlotPlanner
@@ -46,24 +49,27 @@ fun TimesScreen(data: ScheduleData, busy: Boolean, onClose: () -> Unit, onSave: 
         }.exceptionOrNull()?.let { if (it is DateTimeException) "存在无效时间，请检查跨天的课程" else it.message }
         if (error == null) onSave(data.schedule.copy(fixedLessonMinutes = if (fixed) minutes else null, updatedAt = System.currentTimeMillis()), slots.toList())
     }
-    Scaffold(containerColor = backgroundScreenColor(), topBar = { TopAppBar(title = { Text("作息时间") },
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    Scaffold(modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection), containerColor = backgroundScreenColor(), topBar = { LargeTopAppBar(title = { Text("作息时间") }, scrollBehavior = scrollBehavior,
         navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
-        actions = { TextButton(onClick = ::save, enabled = !busy) { Text("保存") } }) }) { inset ->
+        actions = { Button(shapes = ButtonDefaults.shapes(), onClick = ::save, enabled = !busy, modifier = Modifier.padding(end = 12.dp)) { Text("保存") } }) }) { inset ->
         Column(Modifier.padding(inset).fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            SettingsSection("课程节奏") {
             StepperRow("每天节数", "${slots.size}", { resize(slots.size - 1) }, { resize(slots.size + 1) }, slots.size > occupiedEnd, slots.size < 30)
             SwitchRow("固定课时", fixed, { fixed = it; applyFixed() })
             if (fixed) StepperRow("每节时长", "$minutes 分", { minutes = (minutes - 5).coerceAtLeast(5); applyFixed() },
                 { minutes = (minutes + 5).coerceAtMost(240); applyFixed() }, minutes > 5, minutes < 240)
             error?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.error) }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
+            GroupTitle("每日时间表")
             slots.forEachIndexed { index, slot ->
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically,
+                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("${slot.section}", Modifier.width(28.dp), fontWeight = FontWeight.SemiBold)
-                    FilledTonalButton(onClick = { picking = index to true }) { Text(slot.startTime) }
+                    FilledTonalButton(shapes = ButtonDefaults.shapes(), onClick = { picking = index to true }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text(slot.startTime) }
                     Text("–", color = MaterialTheme.colorScheme.outline)
                     if (fixed) Text(slot.endTime, Modifier.padding(horizontal = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    else FilledTonalButton(onClick = { picking = index to false }) { Text(slot.endTime) }
+                    else FilledTonalButton(shapes = ButtonDefaults.shapes(), onClick = { picking = index to false }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text(slot.endTime) }
                 }
             }
         }

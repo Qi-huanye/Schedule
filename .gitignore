@@ -8,6 +8,7 @@ local.properties
 *.apk
 *.aab
 captures/
+.validation/
 *.hprof
 .DS_Store
 

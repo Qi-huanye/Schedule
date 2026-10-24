@@ -62,6 +62,18 @@ fun imageColorScheme(seed: Int, dark: Boolean): ColorScheme {
         surfaceContainerHighest = roles.surfaceContainerHighest().color(),
         surfaceContainerLow = roles.surfaceContainerLow().color(),
         surfaceContainerLowest = roles.surfaceContainerLowest().color(),
+        primaryFixed = roles.primaryFixed().color(),
+        primaryFixedDim = roles.primaryFixedDim().color(),
+        onPrimaryFixed = roles.onPrimaryFixed().color(),
+        onPrimaryFixedVariant = roles.onPrimaryFixedVariant().color(),
+        secondaryFixed = roles.secondaryFixed().color(),
+        secondaryFixedDim = roles.secondaryFixedDim().color(),
+        onSecondaryFixed = roles.onSecondaryFixed().color(),
+        onSecondaryFixedVariant = roles.onSecondaryFixedVariant().color(),
+        tertiaryFixed = roles.tertiaryFixed().color(),
+        tertiaryFixedDim = roles.tertiaryFixedDim().color(),
+        onTertiaryFixed = roles.onTertiaryFixed().color(),
+        onTertiaryFixedVariant = roles.onTertiaryFixedVariant().color(),
     )
 }
 

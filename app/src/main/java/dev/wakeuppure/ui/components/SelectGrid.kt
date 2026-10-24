@@ -40,11 +40,13 @@ fun SelectGrid(values: List<Int>, columns: Int, state: (Int) -> CellState, onTap
     label: (Int) -> String = { it.toString() }, marked: (Int) -> Boolean = { false }, describe: (Int) -> String = label,
     trailing: (@Composable (Modifier) -> Unit)? = null) {
     val items: List<Int?> = values + if (trailing != null) listOf(null) else emptyList()
+    BoxWithConstraints {
+    val adaptiveColumns = minOf(columns, ((maxWidth.value + 6f) / 54f).toInt().coerceAtLeast(1))
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items.chunked(columns).forEach { row ->
+        items.chunked(adaptiveColumns).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 row.forEach { value ->
-                    val cell = Modifier.weight(1f).height(38.dp)
+                    val cell = Modifier.weight(1f).heightIn(min = 48.dp)
                     if (value == null) trailing?.invoke(cell) else {
                         val s = state(value)
                         val colors = MaterialTheme.colorScheme
@@ -53,7 +55,7 @@ fun SelectGrid(values: List<Int>, columns: Int, state: (Int) -> CellState, onTap
                             CellState.INSIDE -> colors.primaryContainer to colors.onPrimaryContainer
                             CellState.NONE -> colors.surfaceContainerHighest to colors.onSurface
                         }
-                        Box(cell.clip(RoundedCornerShape(10.dp)).background(bg).clickable { onTap(value) }
+                        Box(cell.clip(if (s == CellState.EDGE) CircleShape else RoundedCornerShape(12.dp)).background(bg).clickable { onTap(value) }
                             .semantics { selected = s != CellState.NONE; contentDescription = describe(value) },
                             contentAlignment = Alignment.Center) {
                             Text(label(value), color = fg, fontWeight = if (s == CellState.EDGE) FontWeight.SemiBold else FontWeight.Normal,
@@ -63,9 +65,10 @@ fun SelectGrid(values: List<Int>, columns: Int, state: (Int) -> CellState, onTap
                         }
                     }
                 }
-                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                repeat(adaptiveColumns - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
+    }
     }
 }
 

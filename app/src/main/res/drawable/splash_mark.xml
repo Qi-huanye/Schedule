@@ -1,0 +1,5 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><group android:name="mark" android:pivotX="54" android:pivotY="54"><path android:fillColor="@color/splash_ink" android:pathData="M34,36 Q34,30 40,30 L62,30 Q74,30 74,42 L74,49 L50,49 Q34,49 34,36 Z" />
+    <path android:fillColor="@color/splash_ink" android:pathData="M34,56 L58,56 Q74,56 74,70 Q74,77 67,77 L46,77 Q34,77 34,65 Z" />
+    <group android:name="spark" android:pivotX="73" android:pivotY="35">
+      <path android:fillColor="@color/splash_accent" android:pathData="M73,25 L76,32 L83,35 L76,38 L73,45 L70,38 L63,35 L70,32 Z" />
+    </group></group></vector>

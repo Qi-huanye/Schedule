@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package dev.wakeuppure.ui.settings
 
 import android.content.Intent
@@ -20,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import dev.wakeuppure.data.export.ScheduleExporter
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.ui.PureViewModel
@@ -77,11 +80,12 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
     fun openSheet(target: ImportSheet) { text = ""; vm.clearImport(); sheet = target }
     // A parsed import replaces the input sheet with the shared confirmation dialog.
     LaunchedEffect(pending) { if (pending != null) sheet = null }
-    Scaffold(containerColor = backgroundScreenColor(), topBar = { TopAppBar(title = { Text("导入与导出") },
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    Scaffold(modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection), containerColor = backgroundScreenColor(), topBar = { LargeTopAppBar(title = { Text("导入与导出") }, scrollBehavior = scrollBehavior,
         navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { inset ->
         Column(Modifier.padding(inset).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            GroupTitle("导入")
+            SettingsSection("导入") {
             Surface(onClick = { file.launch(arrayOf("*/*")) }, enabled = !busy, shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -94,8 +98,9 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
             }
             ActionRow(Icons.Default.ContentPaste, "粘贴文本", !busy, chevron = true) { openSheet(ImportSheet.TEXT) }
             ActionRow(Icons.Default.Link, "WakeUp 分享口令", !busy, chevron = true) { openSheet(ImportSheet.TOKEN) }
+            }
             data?.let { current ->
-                GroupTitle("导出当前课表")
+                SettingsSection("导出当前课表") {
                 ActionRow(Icons.Default.Download, "WakeUp JSON") { export("Schedule.json") { ScheduleExporter.json(current) } }
                 ActionRow(Icons.Default.Download, "ICS 日历") { export("Schedule.ics") { ScheduleExporter.ics(current) } }
                 ActionRow(Icons.Default.Share, "分享文本") {
@@ -104,9 +109,11 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
                     }, "分享课表"))
                 }
             }
-            GroupTitle("备份")
+                }
+            SettingsSection("备份") {
             ActionRow(Icons.Default.Download, "备份全部课表", all.isNotEmpty()) {
                 export("Schedule-backup.json") { ScheduleExporter.backup(all, vm.appearance.value) }
+            }
             }
         }
     }
@@ -129,7 +136,7 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { profile.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }, enabled = !busy) { Text("协议配置") }
                     Spacer(Modifier.weight(1f))
-                    Button(onClick = { vm.importToken(text) }, enabled = text.isNotBlank() && !busy) { Text("联网获取") }
+                    Button(shapes = ButtonDefaults.shapes(), onClick = { vm.importToken(text) }, enabled = text.isNotBlank() && !busy) { Text("联网获取") }
                 }
             }
         }
@@ -147,7 +154,7 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
 
 @Composable
 private fun ActionRow(icon: ImageVector, title: String, enabled: Boolean = true, chevron: Boolean = false, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).heightIn(min = 52.dp).padding(horizontal = 16.dp),
+    Row(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).heightIn(min = 64.dp).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,

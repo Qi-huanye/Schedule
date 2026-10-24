@@ -1,8 +1,14 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package dev.wakeuppure.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -11,9 +17,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -25,10 +35,11 @@ import dev.wakeuppure.ui.settings.*
 import dev.wakeuppure.ui.timetable.TimetableScreen
 import dev.wakeuppure.ui.today.TodayScreen
 import dev.wakeuppure.ui.update.*
+import dev.wakeuppure.ui.components.*
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = null,
     backgrounds: BackgroundViewModel = viewModel(), onContentReady: () -> Unit = {}) {
@@ -63,39 +74,68 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
     val createSchedule = { creating = true }
     val openTransfer = { nav.navigate("transfer") }
     PureTheme(appearance, backgroundState) {
+        val wide = LocalWindowInfo.current.containerSize.width >= with(LocalDensity.current) { 600.dp.roundToPx() }
+        val destinations = listOf(Triple("timetable", "课表", Icons.Default.CalendarMonth), Triple("today", "今日", Icons.Default.Today), Triple("mine", "我的", Icons.Default.PersonOutline))
+        val topLevel = route in destinations.map { it.first }
+        val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
+        val effects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+        fun navigateTo(id: String) {
+            nav.navigate(id) {
+                popUpTo(nav.graph.startDestinationId) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
         Surface(Modifier.fillMaxSize().onSizeChanged { backgrounds.setViewport(it.width, it.height) }
             .onGloballyPositioned { onContentReady() },
             color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) {
             Scaffold(containerColor = Color.Transparent, bottomBar = {
-                if (route in listOf("timetable", "today", "mine")) NavigationBar(containerColor = backgroundChromeColor(MaterialTheme.colorScheme.surfaceContainer)) {
-                    listOf(Triple("timetable", "课表", Icons.Default.CalendarMonth), Triple("today", "今日", Icons.Default.Today), Triple("mine", "我的", Icons.Default.PersonOutline)).forEach { (id, label, icon) ->
-                        NavigationBarItem(selected = route == id, onClick = { nav.navigate(id) { popUpTo("timetable"); launchSingleTop = true } }, icon = { Icon(icon, label) }, label = { Text(label) })
+                if (topLevel && !wide) NavigationBar(containerColor = backgroundChromeColor(MaterialTheme.colorScheme.surfaceContainer)) {
+                    destinations.forEach { (id, label, icon) ->
+                        NavigationBarItem(selected = route == id, onClick = { navigateTo(id) }, icon = { Icon(icon, null) }, label = { Text(label) })
                     }
                 }
             }, floatingActionButton = {
-                if (route == "timetable" && data != null) FloatingActionButton(onClick = { editCourse = null; nav.navigate("course") }) { Icon(Icons.Default.Add, "添加课程") }
+                if (route == "timetable" && data != null) ExtendedFloatingActionButton(
+                    onClick = { editCourse = null; nav.navigate("course") },
+                    modifier = Modifier.semantics { contentDescription = "添加课程" },
+                    icon = { Icon(Icons.Default.Add, null) }, text = { Text("添加课程") })
             }) { padding ->
                 // Inner screens with their own Scaffold must not apply the system bar insets a second time.
-                NavHost(nav, startDestination = "timetable", modifier = Modifier.padding(padding).consumeWindowInsets(padding)) {
-                    composable("timetable") {
-                        if (data == null) EmptySchedule(createSchedule, openTransfer)
-                        else TimetableScreen(requireNotNull(state.schedules.timetable), all, now, { detail = it }, { editCourse = it; nav.navigate("course") }, vm::select, createSchedule, openTransfer,
-                            prefetchEnabled = firstFrameDrawn)
+                Row(Modifier.padding(padding).consumeWindowInsets(padding)) {
+                    if (wide && topLevel) NavigationRail(containerColor = backgroundChromeColor(MaterialTheme.colorScheme.surfaceContainer),
+                        header = { ScheduleMark(Modifier.padding(vertical = 16.dp).size(40.dp)) }, modifier = Modifier.fillMaxHeight()) {
+                        Spacer(Modifier.height(24.dp))
+                        destinations.forEach { (id, label, icon) ->
+                            NavigationRailItem(selected = route == id, onClick = { navigateTo(id) },
+                                icon = { Icon(icon, null) }, label = { Text(label) }, modifier = Modifier.padding(vertical = 8.dp))
+                        }
                     }
-                    composable("today") {
-                        if (data == null) EmptySchedule(createSchedule, openTransfer) else TodayScreen(data, now) { detail = it }
+                    NavHost(nav, startDestination = "timetable", modifier = Modifier.weight(1f),
+                        enterTransition = { fadeIn(effects) + slideInHorizontally(spatial) { it / 12 } },
+                        exitTransition = { fadeOut(effects) + slideOutHorizontally(spatial) { -it / 12 } },
+                        popEnterTransition = { fadeIn(effects) + slideInHorizontally(spatial) { -it / 12 } },
+                        popExitTransition = { fadeOut(effects) + slideOutHorizontally(spatial) { it / 12 } }) {
+                        composable("timetable") {
+                            if (data == null) EmptySchedule(createSchedule, openTransfer)
+                            else TimetableScreen(requireNotNull(state.schedules.timetable), all, now, { detail = it }, { editCourse = it; nav.navigate("course") }, vm::select, createSchedule, openTransfer,
+                                prefetchEnabled = firstFrameDrawn)
+                        }
+                        composable("today") {
+                            if (data == null) EmptySchedule(createSchedule, openTransfer) else TodayScreen(data, now) { detail = it }
+                        }
+                        composable("mine") {
+                            val settingsUpdates = updates ?: viewModel<AppUpdateViewModel>(viewModelStoreOwner = owner)
+                            MineScreen(vm, data, appearance, backgrounds, settingsUpdates, { imagePicker.launch(arrayOf("image/*")) },
+                                { nav.navigate("times") }, openTransfer, createSchedule)
+                        }
+                        composable("course") {
+                            data?.let { CourseEditor(it, editCourse, busy, { nav.popBackStack() }, { item -> vm.deleteCourse(item.course.id); nav.popBackStack() }) { c, p, slots ->
+                                vm.saveCourse(c, p, slots) { nav.popBackStack() } } }
+                        }
+                        composable("times") { data?.let { TimesScreen(it, busy, { nav.popBackStack() }) { s, slots -> vm.saveSchedule(s, slots) { nav.popBackStack() } } } }
+                        composable("transfer") { TransferScreen(vm, all, data) { nav.popBackStack() } }
                     }
-                    composable("mine") {
-                        val settingsUpdates = updates ?: viewModel<AppUpdateViewModel>(viewModelStoreOwner = owner)
-                        MineScreen(vm, data, appearance, backgrounds, settingsUpdates, { imagePicker.launch(arrayOf("image/*")) },
-                            { nav.navigate("times") }, openTransfer, createSchedule)
-                    }
-                    composable("course") {
-                        data?.let { CourseEditor(it, editCourse, busy, { nav.popBackStack() }, { item -> vm.deleteCourse(item.course.id); nav.popBackStack() }) { c, p, slots ->
-                            vm.saveCourse(c, p, slots) { nav.popBackStack() } } }
-                    }
-                    composable("times") { data?.let { TimesScreen(it, busy, { nav.popBackStack() }) { s, slots -> vm.saveSchedule(s, slots) { nav.popBackStack() } } } }
-                    composable("transfer") { TransferScreen(vm, all, data) { nav.popBackStack() } }
                 }
             }
             detail?.let { item -> CourseDetailSheet(item, data?.timeSlots.orEmpty(), { detail = null }) { editCourse = item; detail = null; nav.navigate("course") } }
@@ -106,16 +146,16 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun EmptySchedule(create: () -> Unit, import: () -> Unit) {
-    Column(Modifier.fillMaxSize().background(backgroundPanelColor()).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Icon(Icons.Default.CalendarMonth, null, Modifier.size(56.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(16.dp))
-        Text("还没有课表", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = create) { Text("新建课表") }
-            FilledTonalButton(onClick = import) { Text("导入课表") }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        FocusPanel(Modifier.widthIn(max = 480.dp).fillMaxWidth()) {
+            ScheduleMark(Modifier.size(80.dp))
+            Text("把每一周，\n安排成喜欢的样子。", style = MaterialTheme.typography.headlineLarge)
+            Text("还没有课表。创建一份，或导入已有课程。", style = MaterialTheme.typography.bodyLarge)
+            Button(shapes = ButtonDefaults.shapes(), onClick = create, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("新建课表") }
+            FilledTonalButton(shapes = ButtonDefaults.shapes(), onClick = import, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) { Text("导入课表") }
         }
     }
 }

@@ -52,35 +52,40 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
     Column(Modifier.fillMaxSize().padding(if (LocalBackgroundActive.current) 12.dp else 0.dp)
         .clip(panelShape).background(backgroundPanelColor())
         .verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
-        Text("我的", Modifier.padding(start = 16.dp, top = 16.dp), style = MaterialTheme.typography.headlineSmall)
+        PageHeading("我的", "让课表更合你的习惯") { ScheduleMark(Modifier.size(48.dp)) }
         if (data != null) {
             val s = data.schedule
-            GroupTitle("当前课表 · ${s.name}")
-            SettingRow("名称", s.name) { sheet = "name" }
-            val start = runCatching { LocalDate.parse(s.semesterStartDate) }.getOrNull()
-            SettingRow("学期", listOfNotNull(start?.let { "${it.monthValue}月${it.dayOfMonth}日开学" }, "${s.maxWeeks} 周").joinToString(" · ")) { sheet = "term" }
-            SettingRow("作息时间", "每天 ${data.timeSlots.size} 节", onClick = onTimes)
-            SwitchRow("显示周末", s.showWeekend, { value -> update { it.copy(showWeekend = value) } })
-            SegmentRow("每周第一天", listOf(1 to "周一", 7 to "周日"), s.firstDay, { value -> update { it.copy(firstDay = value) } }, 132.dp)
-            SettingRow("课程配色", if (followsBackground) "跟随背景" else null,
-                trailing = { if (!followsBackground) Swatches(paletteColors(data).take(4).map(::hexColor)) }) { sheet = "palette" }
-            SettingRow("课前提醒", s.reminderMinutes?.let { "提前 $it 分钟" } ?: "关闭") { sheet = "reminder" }
-            SettingRow("新建课表", onClick = onNewSchedule)
-            SettingRow("删除此课表", titleColor = MaterialTheme.colorScheme.error, chevron = false, onClick = { sheet = "delete" })
+            SettingsSection("当前课表 · ${s.name}") {
+                SettingRow("名称", s.name) { sheet = "name" }
+                val start = runCatching { LocalDate.parse(s.semesterStartDate) }.getOrNull()
+                SettingRow("学期", listOfNotNull(start?.let { "${it.monthValue}月${it.dayOfMonth}日开学" }, "${s.maxWeeks} 周").joinToString(" · ")) { sheet = "term" }
+                SettingRow("作息时间", "每天 ${data.timeSlots.size} 节", onClick = onTimes)
+                SwitchRow("显示周末", s.showWeekend, { value -> update { it.copy(showWeekend = value) } })
+                SegmentRow("每周第一天", listOf(1 to "周一", 7 to "周日"), s.firstDay, { value -> update { it.copy(firstDay = value) } }, 132.dp)
+                SettingRow("课程配色", if (followsBackground) "跟随背景" else null,
+                    trailing = { if (!followsBackground) Swatches(paletteColors(data).take(4).map(::hexColor)) }) { sheet = "palette" }
+                SettingRow("课前提醒", s.reminderMinutes?.let { "提前 $it 分钟" } ?: "关闭") { sheet = "reminder" }
+                SettingRow("新建课表", onClick = onNewSchedule)
+                SettingRow("删除此课表", titleColor = MaterialTheme.colorScheme.error, chevron = false, onClick = { sheet = "delete" })
+            }
         } else {
-            GroupTitle("课表")
-            SettingRow("新建课表", onClick = onNewSchedule)
-            SettingRow("导入课表", onClick = onTransfer)
+            SettingsSection("课表") {
+                SettingRow("新建课表", onClick = onNewSchedule)
+                SettingRow("导入课表", onClick = onTransfer)
+            }
         }
-        GroupTitle("外观")
-        SegmentRow("主题", listOf("system" to "系统", "light" to "浅色", "dark" to "深色"), appearance, vm::setAppearance, 200.dp)
-        BackgroundSettingsSection(background, onChooseImage, backgrounds::clearBackground, backgrounds::setImageTheme,
-            backgrounds::previewBlur, backgrounds::commitBlur, backgrounds::setFocus)
-        GroupTitle("数据")
-        SettingRow("导入与导出", onClick = onTransfer)
-        GroupTitle("关于")
-        AppUpdateSettings(updateState, updates::setAutoCheckEnabled) { updates.checkForUpdates(manual = true) }
-        SettingRow("开源许可与隐私") { sheet = "licenses" }
+        SettingsSection("外观") {
+            SegmentRow("主题", listOf("system" to "系统", "light" to "浅色", "dark" to "深色"), appearance, vm::setAppearance, 200.dp)
+            BackgroundSettingsSection(background, onChooseImage, backgrounds::clearBackground, backgrounds::setImageTheme,
+                backgrounds::previewBlur, backgrounds::commitBlur, backgrounds::setFocus)
+        }
+        SettingsSection("数据") {
+            SettingRow("导入与导出", onClick = onTransfer)
+        }
+        SettingsSection("关于") {
+            AppUpdateSettings(updateState, updates::setAutoCheckEnabled) { updates.checkForUpdates(manual = true) }
+            SettingRow("开源许可与隐私") { sheet = "licenses" }
+        }
     }
     val close = { sheet = null }
     when (sheet) {

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package dev.wakeuppure.ui.course
 
 import androidx.compose.foundation.background
@@ -68,12 +70,12 @@ internal fun PeriodSheet(initial: CoursePeriod, initialSlots: List<TimeSlot>, ma
 @Composable
 fun CourseDetailSheet(item: CourseWithPeriods, slots: List<TimeSlot>, onDismiss: () -> Unit, onEdit: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(14.dp).background(courseDisplayColors(item.course.id, item.course.color).first, CircleShape))
                 Spacer(Modifier.width(10.dp))
                 Text(item.course.name, Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall)
-                FilledTonalButton(onClick = onEdit) { Icon(Icons.Default.Edit, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("编辑") }
+                FilledTonalButton(shapes = ButtonDefaults.shapes(), onClick = onEdit) { Icon(Icons.Default.Edit, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("编辑") }
             }
             item.periods.forEach { p ->
                 val start = slots.find { it.section == p.startSection }?.startTime

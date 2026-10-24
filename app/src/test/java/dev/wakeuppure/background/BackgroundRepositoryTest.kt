@@ -300,7 +300,7 @@ class BackgroundRepositoryTest {
         val nestedFile = File(nested, "source-12345.tmp").apply { writeText("keep nested files") }
         val outside = File(sources, "unrelated.txt").apply { writeText("keep the link target") }
         val link = File(directory, "${UUID.randomUUID()}.png")
-        Files.createSymbolicLink(link.toPath(), outside.toPath())
+        createSymbolicLinkIfSupported(link, outside)
 
         val restarted = BackgroundRepository(context)
         assertEquals(previous, restarted.restore())
@@ -346,12 +346,22 @@ class BackgroundRepositoryTest {
         val external = File(sources, "unrelated-directory").apply { mkdir() }
         val externalFiles = listOf("source-12345.tmp", "${UUID.randomUUID()}.png", "${UUID.randomUUID()}.png.new")
             .map { File(external, it).apply { writeText("unrelated data") } }
-        Files.createSymbolicLink(directory.toPath(), external.toPath())
+        createSymbolicLinkIfSupported(directory, external)
         try {
             assertEquals(options, repository.restore())
             externalFiles.forEach { assertEquals("unrelated data", it.readText()) }
             assertTrue(Files.isSymbolicLink(directory.toPath()))
         } finally { Files.delete(directory.toPath()) }
+    }
+
+    private fun createSymbolicLinkIfSupported(link: File, target: File) {
+        try { Files.createSymbolicLink(link.toPath(), target.toPath()) }
+        catch (e: java.nio.file.FileSystemException) {
+            // Windows requires a symlink privilege or Developer Mode; report an explicit skip.
+            if (System.getProperty("os.name", "").orEmpty().startsWith("Windows"))
+                org.junit.Assume.assumeNoException("Symbolic links are unavailable to this Windows account", e)
+            else throw e
+        }
     }
 
     private fun createKilledImportFiles(currentName: String): List<File> = listOf(

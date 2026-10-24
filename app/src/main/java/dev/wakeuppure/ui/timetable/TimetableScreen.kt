@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package dev.wakeuppure.ui.timetable
 
 import androidx.compose.foundation.*
@@ -25,6 +27,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.domain.usecase.*
 import dev.wakeuppure.data.local.PreparedTimetable
@@ -66,19 +71,35 @@ fun TimetableScreen(timetable: PreparedTimetable, all: List<ScheduleData>, now: 
     }
     var panel by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().background(backgroundChromeColor()).heightIn(min = 64.dp).padding(start = 14.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { panel = true }.padding(vertical = 8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (week == current) "第${week}周" else "第${week}周 · 非本周",
-                        fontSize = 19.sp, lineHeight = 23.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Icon(Icons.Default.ExpandMore, "选择周次或课表", Modifier.size(20.dp))
+        Column(Modifier.fillMaxWidth().background(backgroundChromeColor())) {
+            Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).clip(MaterialTheme.shapes.large).clickable { panel = true }.padding(4.dp)) {
+                    Text(data.schedule.name, style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("第${week}周", style = MaterialTheme.typography.headlineLarge)
+                        Icon(Icons.Default.ExpandMore, "选择周次或课表", Modifier.padding(start = 4.dp).size(28.dp))
+                    }
                 }
-                Text(data.schedule.name, fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (week != current) Surface(shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
+                    Text("非本周", Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = MaterialTheme.typography.labelLarge)
+                }
             }
-            IconButton(onClick = { showWeek((week - 1).coerceAtLeast(1)) }, enabled = week > 1) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "上一周") }
-            IconButton(onClick = { showWeek((week + 1).coerceAtMost(data.schedule.maxWeeks)) }, enabled = week < data.schedule.maxWeeks) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "下一周") }
-            IconButton(onClick = { showWeek(current.coerceIn(1, data.schedule.maxWeeks)) }) { Icon(Icons.Default.Today, "回到本周") }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                FilledTonalIconButton(onClick = { showWeek((week - 1).coerceAtLeast(1)) }, enabled = week > 1,
+                    modifier = Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "上一周") }
+                FilledTonalButton(shapes = ButtonDefaults.shapes(), onClick = { showWeek(current.coerceIn(1, data.schedule.maxWeeks)) },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                    Icon(Icons.Default.Today, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp)); Text("回到本周")
+                }
+                FilledTonalIconButton(onClick = { showWeek((week + 1).coerceAtMost(data.schedule.maxWeeks)) },
+                    enabled = week < data.schedule.maxWeeks, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "下一周")
+                }
+            }
         }
         if (current < 1 || current > data.schedule.maxWeeks) Text(if (current < 1) "尚未开学" else "本学期已结束",
             Modifier.align(Alignment.CenterHorizontally).background(backgroundPanelColor()).padding(bottom = 8.dp), color = MaterialTheme.colorScheme.secondary)
@@ -98,63 +119,75 @@ private fun TimetableWeek(data: ScheduleData, layout: TimetableWeekLayout, now: 
     onDetail: (CourseWithPeriods) -> Unit, onEdit: (CourseWithPeriods) -> Unit) {
     val today = now.toLocalDate().toEpochDay()
     val second = now.toLocalTime().toSecondOfDay()
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().background(backgroundChromeColor()).padding(end = 6.dp, bottom = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.width(42.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(layout.month, fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.Bold)
-                Text("月", fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            layout.days.forEach { day ->
-                val isToday = day.epochDay == today
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(listOf("一", "二", "三", "四", "五", "六", "日")[day.dayOfWeek-1], fontSize = 11.sp, lineHeight = 15.sp,
-                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                    Box(Modifier.size(27.dp).background(if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(7.dp)), contentAlignment = Alignment.Center) {
-                        Text("${day.dayOfMonth}", fontSize = 14.sp, lineHeight = 18.sp,
-                            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isToday) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+    val fontScale = LocalDensity.current.fontScale
+    val horizontalScroll = rememberScrollState()
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Keep dense timetable columns readable on narrow windows and with large text.
+        val contentWidth = maxOf(maxWidth, 42.dp + (48 * fontScale.coerceAtLeast(1f)).dp * layout.days.size)
+        Row(Modifier.fillMaxSize().horizontalScroll(horizontalScroll)) {
+            Column(Modifier.width(contentWidth).fillMaxHeight()) {
+                Row(Modifier.fillMaxWidth().background(backgroundChromeColor()).padding(end = 6.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.width(42.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(layout.month, fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.Bold)
+                        Text("月", fontSize = 10.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    layout.days.forEach { day ->
+                        val isToday = day.epochDay == today
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(listOf("一", "二", "三", "四", "五", "六", "日")[day.dayOfWeek-1], fontSize = 11.sp, lineHeight = 15.sp,
+                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                            Box(Modifier.size(32.dp).background(if (isToday) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                                Text("${day.dayOfMonth}", fontSize = 14.sp, lineHeight = 18.sp,
+                                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isToday) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                     }
                 }
-            }
-        }
-        val slots = layout.slots
-        val height = 68.dp
-        Row(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
-            .padding(bottom = 80.dp, end = 6.dp)) {
-            Column(Modifier.width(42.dp)) { slots.forEach { slot ->
-                Column(Modifier.height(height).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(slot.section.toString(), fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(slot.startTime, fontSize = 9.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(slot.endTime, fontSize = 9.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            } }
-            layout.days.forEach { day ->
-                BoxWithConstraints(Modifier.weight(1f).height(height * slots.size)) {
-                    day.cards.forEach { card ->
-                        val course = data.courses[card.courseIndex]
-                        val period = course.periods[card.periodIndex]
-                        val ghost = card.ghost
-                        val width = maxWidth / card.laneCount
-                        val (base, courseInk) = courseDisplayColors(course.course.id, course.course.color)
-                        val ink = if (ghost) MaterialTheme.colorScheme.onSurfaceVariant else courseInk
-                        val active = !ghost && day.epochDay == today && card.startSecond != null && card.endSecond != null &&
-                            second >= card.startSecond && second < card.endSecond
-                        Box(Modifier.offset(x = width * card.lane, y = height * card.sectionIndex).width(width)
-                            .height(height * card.sectionSpan).padding(2.dp)
-                            .background(if (ghost) ghostCourseColor() else base, RoundedCornerShape(5.dp))
-                            .then(when {
-                                active -> Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(5.dp))
-                                ghost && LocalBackgroundActive.current -> Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(5.dp))
-                                else -> Modifier
-                            })
-                            .combinedClickable(onClick = { onDetail(course) }, onLongClick = { onEdit(course) }).padding(4.dp)) {
-                            Column {
-                                if (ghost) Text("非本周", fontSize = 9.sp, lineHeight = 11.sp, color = ink)
-                                Text(course.course.name, fontSize = 12.sp, lineHeight = 15.sp, color = ink,
-                                    fontWeight = FontWeight.Medium, maxLines = 4, overflow = TextOverflow.Ellipsis)
-                                val room = period.classroom.ifBlank { course.course.classroom }
-                                if (room.isNotBlank()) Text(room, fontSize = 10.sp, lineHeight = 13.sp, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                val slots = layout.slots
+                val height = (68 * fontScale.coerceAtLeast(1f)).dp
+                Row(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+                    .padding(bottom = 80.dp, end = 6.dp)) {
+                    Column(Modifier.width(42.dp)) { slots.forEach { slot ->
+                        Column(Modifier.height(height).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(slot.section.toString(), fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold)
+                            Text(slot.startTime, fontSize = 9.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(slot.endTime, fontSize = 9.sp, lineHeight = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } }
+                    layout.days.forEach { day ->
+                        BoxWithConstraints(Modifier.weight(1f).height(height * slots.size)) {
+                            day.cards.forEach { card ->
+                                val course = data.courses[card.courseIndex]
+                                val period = course.periods[card.periodIndex]
+                                val ghost = card.ghost
+                                val width = maxWidth / card.laneCount
+                                val (base, courseInk) = courseDisplayColors(course.course.id, course.course.color)
+                                val ink = if (ghost) MaterialTheme.colorScheme.onSurfaceVariant else courseInk
+                                val active = !ghost && day.epochDay == today && card.startSecond != null && card.endSecond != null &&
+                                    second >= card.startSecond && second < card.endSecond
+                                Box(Modifier.offset(x = width * card.lane, y = height * card.sectionIndex).width(width)
+                                    .height(height * card.sectionSpan).padding(2.dp)
+                                    .background(if (ghost) ghostCourseColor() else base, RoundedCornerShape(12.dp))
+                                    .then(when {
+                                        active -> Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+                                        ghost && LocalBackgroundActive.current -> Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                                        else -> Modifier
+                                    })
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .semantics { contentDescription = "${course.course.name}，${period.startSection}至${period.endSection}节" +
+                                        (if (ghost) "，非本周" else if (active) "，进行中" else "") }
+                                    .combinedClickable(onClick = { onDetail(course) }, onLongClick = { onEdit(course) }).padding(5.dp)) {
+                                    Column {
+                                        if (active && card.sectionSpan >= 2) Text("进行中", fontSize = 9.sp, lineHeight = 11.sp, color = ink, fontWeight = FontWeight.Bold)
+                                        if (ghost) Text("非本周", fontSize = 9.sp, lineHeight = 11.sp, color = ink)
+                                        Text(course.course.name, fontSize = 12.sp, lineHeight = 15.sp, color = ink,
+                                            fontWeight = FontWeight.Medium, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                                        val room = period.classroom.ifBlank { course.course.classroom }
+                                        if (room.isNotBlank()) Text(room, fontSize = 10.sp, lineHeight = 13.sp, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
                             }
                         }
                     }

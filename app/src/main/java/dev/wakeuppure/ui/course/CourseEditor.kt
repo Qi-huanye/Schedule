@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package dev.wakeuppure.ui.course
 
 import androidx.compose.foundation.*
@@ -15,6 +17,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.draw.clip
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.ui.background.backgroundPanelColor
 import dev.wakeuppure.ui.background.backgroundScreenColor
@@ -38,9 +45,10 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
         invalid = course.name.isBlank()
         if (!invalid) onSave(course, periods.toList(), slots)
     }
-    Scaffold(containerColor = backgroundScreenColor(), topBar = { TopAppBar(title = { Text(if (initial == null) "添加课程" else "编辑课程") },
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    Scaffold(modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection), containerColor = backgroundScreenColor(), topBar = { LargeTopAppBar(title = { Text(if (initial == null) "添加课程" else "编辑课程") }, scrollBehavior = scrollBehavior,
         navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Default.Close, "关闭") } },
-        actions = { TextButton(onClick = ::save, enabled = !busy) { Text("保存") } }) }) { padding ->
+        actions = { Button(shapes = ButtonDefaults.shapes(), onClick = ::save, enabled = !busy, modifier = Modifier.padding(end = 12.dp)) { Text("保存") } }) }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(course.name, { course = course.copy(name = it); invalid = false }, label = { Text("课程名") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth(), isError = invalid, supportingText = if (invalid) { { Text("请填写课程名") } } else null)
@@ -49,9 +57,10 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
                 OutlinedTextField(course.classroom, { course = course.copy(classroom = it) }, label = { Text("教室") }, modifier = Modifier.weight(1f), singleLine = true)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                (CoursePalettes.find(data.schedule.colorPalette) ?: CoursePalettes.all.first()).colors.forEach { hex ->
-                    Box(Modifier.size(40.dp).background(Color(android.graphics.Color.parseColor(hex)), CircleShape)
+                (CoursePalettes.find(data.schedule.colorPalette) ?: CoursePalettes.all.first()).colors.forEachIndexed { index, hex ->
+                    Box(Modifier.size(48.dp).clip(CircleShape).background(Color(android.graphics.Color.parseColor(hex)), CircleShape)
                         .border(if (course.color == hex) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                        .semantics { contentDescription = "课程颜色 ${index + 1}"; selected = course.color == hex }
                         .clickable { course = course.copy(color = hex) }, contentAlignment = Alignment.Center) {
                         if (course.color == hex) Icon(Icons.Default.Check, "已选颜色", tint = Color(0xFF24463F))
                     }
@@ -70,7 +79,7 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
                     }
                 }
             }
-            TextButton(onClick = { periods.add(defaultPeriod()); addedPeriod = true; editingPeriod = periods.lastIndex }) {
+            FilledTonalButton(shapes = ButtonDefaults.shapes(), onClick = { periods.add(defaultPeriod()); addedPeriod = true; editingPeriod = periods.lastIndex }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Icon(Icons.Default.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("添加时间")
             }
             OutlinedTextField(course.note, { course = course.copy(note = it) }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), minLines = 2)

@@ -13,6 +13,7 @@ import dev.wakeuppure.data.update.ReleaseSource
 import dev.wakeuppure.data.update.isNewerVersion
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,6 +42,7 @@ class AppUpdateViewModel(
     private val now: () -> Long,
     private val currentVersion: String,
     downloader: ApkDownloader? = null,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(application, null, System::currentTimeMillis, BuildConfig.VERSION_NAME)
 
@@ -56,7 +58,7 @@ class AppUpdateViewModel(
     private var cleanupJob: Job? = null
 
     private fun prepare() {
-        if (cleanupJob == null) cleanupJob = viewModelScope.launch(Dispatchers.IO) {
+        if (cleanupJob == null) cleanupJob = viewModelScope.launch(ioDispatcher) {
             runCatching { downloads.clean() }
         }
     }
@@ -74,7 +76,7 @@ class AppUpdateViewModel(
         mutableState.update { it.copy(checking = true, message = null) }
         checkJob = viewModelScope.launch {
             try {
-                val release = kotlinx.coroutines.withContext(Dispatchers.IO) { releases.latest() }
+                val release = kotlinx.coroutines.withContext(ioDispatcher) { releases.latest() }
                 val newer = release != null && isNewerVersion(release.version, currentVersion)
                 val skipped = release?.version?.substringBefore('+') == preferences.getString("skipped_version", null)
                 mutableState.update { state ->

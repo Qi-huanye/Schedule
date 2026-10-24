@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package dev.wakeuppure.ui.settings
 
 import androidx.compose.foundation.clickable
@@ -80,7 +82,7 @@ internal fun ReminderSheet(current: Int?, onDismiss: () -> Unit, onPick: (Int?) 
             if (custom) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(text, { text = it }, label = { Text("提前分钟数") }, singleLine = true, isError = text.isNotEmpty() && minutes == null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
-                Button(onClick = { onPick(minutes) }, enabled = minutes != null) { Text("确定") }
+                Button(shapes = ButtonDefaults.shapes(), onClick = { onPick(minutes) }, enabled = minutes != null) { Text("确定") }
             }
         }
     }
