@@ -25,12 +25,22 @@ object IcsImporter {
             .replace(Regex("\n[ \t]"), "").lines()
         require(lines.first() == "BEGIN:VCALENDAR" && lines.last() == "END:VCALENDAR") { "不是完整的日历文件" }
         val records = mutableListOf<List<Property>>()
+        val taskRecords = mutableListOf<List<Property>>()
+        var component: String? = null
         var event: MutableList<Property>? = null
         var nesting = 0
         for (line in lines) {
             when {
-                line == "BEGIN:VEVENT" -> { require(event == null); event = mutableListOf(); nesting = 0 }
-                line == "END:VEVENT" -> { records += requireNotNull(event).toList(); event = null }
+                line == "BEGIN:VEVENT" || line == "BEGIN:VTODO" -> {
+                    require(event == null) { "日历记录嵌套错误" }
+                    component = line.substringAfter(':'); event = mutableListOf(); nesting = 0
+                }
+                line == "END:VEVENT" || line == "END:VTODO" -> {
+                    require(component == line.substringAfter(':')) { "日历记录不完整" }
+                    if (component == "VEVENT") records += requireNotNull(event).toList()
+                    else taskRecords += requireNotNull(event).toList()
+                    event = null; component = null
+                }
                 event != null && line.startsWith("BEGIN:") -> nesting++
                 event != null && line.startsWith("END:") -> nesting--
                 event != null && nesting == 0 && ':' in line -> {
@@ -41,7 +51,21 @@ object IcsImporter {
                 }
             }
         }
-        require(records.isNotEmpty() && records.size <= 5000) { "没有课程，或课程记录超过 5000 条" }
+        require(event == null) { "日历记录不完整" }
+        require((records.isNotEmpty() || taskRecords.isNotEmpty()) && records.size <= 5000 && taskRecords.size <= 10000) { "没有课程或待办，或日历记录过多" }
+        val todos = taskRecords.filterNot { record -> record.any { it.name == "STATUS" && it.value == "CANCELLED" } }.mapIndexed { index, properties ->
+            fun prop(name: String) = properties.firstOrNull { it.name == name }
+            require(prop("RRULE") == null) { "暂不支持重复待办" }
+            val due = date(requireNotNull(prop("DUE")) { "待办缺少截止时间" })
+            val title = unescape(prop("SUMMARY")?.value.orEmpty())
+            require(title.isNotBlank() && title.length <= 200) { "待办事项为空或过长" }
+            Todo(id = index + 1L, title = title, dueAt = due.toInstant().toEpochMilli(), completed = prop("STATUS")?.value == "COMPLETED")
+        }
+        if (records.isEmpty()) {
+            require(todos.isNotEmpty()) { "日历中没有有效待办" }
+            val base = Instant.ofEpochMilli(todos.minOf { it.dueAt }).atZone(ZoneId.systemDefault()).toLocalDate().with(DayOfWeek.MONDAY)
+            return ScheduleData(Schedule(name = "导入的 ICS 课表", semesterStartDate = base.toString()), emptyList(), todos = todos)
+        }
         val events = records.map { properties ->
             fun prop(name: String) = properties.firstOrNull { it.name == name }
             require(prop("RECURRENCE-ID") == null) { "暂不支持单次改期记录，请先在日历中展开重复事件" }
@@ -137,7 +161,7 @@ object IcsImporter {
             CourseWithPeriods(Course(name=key.first,classroom=key.second,note=key.third,
                 color=listOf("#C1E8DE","#BFDDF1","#E4D5F3","#F3D3D2","#F4E3B5","#CFE4BD")[i%6]),periods)
         }
-        return ScheduleData(Schedule(name="导入的 ICS 课表",semesterStartDate=base.toString(),maxWeeks=maxWeeks),courses,slots)
+        return ScheduleData(Schedule(name="导入的 ICS 课表",semesterStartDate=base.toString(),maxWeeks=maxWeeks),courses,slots,todos)
     }
 
     private fun date(p: Property, fallback: ZoneId = ZoneId.systemDefault()): ZonedDateTime {

@@ -8,7 +8,7 @@ import org.junit.Test
 
 class ExportTest {
     private fun sample() = ScheduleData(
-        Schedule(id = 7, name = "Test", semesterStartDate = "2025-12-29", maxWeeks = 3),
+        Schedule(id = 7, name = "Test", todoReminderMinutes = 15, semesterStartDate = "2025-12-29", maxWeeks = 3),
         listOf(CourseWithPeriods(Course(id = 8, scheduleId = 7, name = "课,程;\\\n".repeat(20),
             teacher = "Teacher", classroom = "Default", note = "Notes\nsecond"),
             listOf(CoursePeriod(id = 9, courseId = 8, dayOfWeek = 7, startWeek = 1, endWeek = 3,
@@ -51,6 +51,29 @@ class ExportTest {
             assertEquals("Override", actual.courses.single().periods.single().classroom)
             assertEquals(WeekType.ODD, actual.courses.single().periods.single().weekType)
         }
+    }
+
+    @Test fun todosExportAsCalendarTasksAndRemainOnlyInAppJson() {
+        val todo = Todo(id = 77, scheduleId = 7, title = "交报告", dueAt = 1_766_000_000_000, courseId = 8)
+        val data = sample().copy(todos = listOf(todo))
+        val ics = ScheduleExporter.ics(data)
+        assertTrue(ics.contains("BEGIN:VTODO\r\n"))
+        assertTrue(ics.contains("SUMMARY:交报告\r\n"))
+        assertTrue(ics.contains("STATUS:NEEDS-ACTION\r\n"))
+        assertFalse(ScheduleExporter.json(data).contains("交报告"))
+        assertEquals(listOf(todo), ScheduleExporter.restore(ScheduleExporter.appJson(listOf(data))).schedules.single().todos)
+    }
+
+    @Test fun calendarRoundTripPreservesTodoDeadlinesCompletionAndEscapedText() {
+        val todo = Todo(id = 5, title = "报告,;\\\n多行", dueAt = 1_766_000_000_000, completed = true)
+        val mixed = dev.wakeuppure.data.ics.IcsImporter.parse(ScheduleExporter.ics(sample().copy(todos = listOf(todo))))
+        assertEquals(todo.title, mixed.todos.single().title)
+        assertEquals(todo.dueAt, mixed.todos.single().dueAt)
+        assertTrue(mixed.todos.single().completed)
+        val tasksOnly = dev.wakeuppure.data.ics.IcsImporter.parse(ScheduleExporter.ics(sample().copy(courses = emptyList(), todos = listOf(todo))))
+        assertTrue(tasksOnly.courses.isEmpty())
+        assertEquals(todo.dueAt, tasksOnly.todos.single().dueAt)
+        assertFalse(ScheduleExporter.legacy(sample().copy(todos = listOf(todo))).contains("多行"))
     }
 
     @Test fun backupPreservesAllFields() {

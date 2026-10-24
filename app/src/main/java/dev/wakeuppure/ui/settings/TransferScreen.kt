@@ -41,6 +41,9 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
     var sheet by remember { mutableStateOf<ImportSheet?>(null) }
     var text by remember { mutableStateOf("") }
     var exportText by remember { mutableStateOf("") }
+    var chooseJsonSchedule by remember { mutableStateOf(false) }
+    var jsonScheduleId by remember { mutableStateOf<Long?>(null) }
+    var selectedJsonScheduleId by remember { mutableStateOf<Long?>(null) }
     val busy by vm.busy.collectAsState()
     val pending by vm.imported.collectAsState()
     val experimental by vm.experimentalToken.collectAsState()
@@ -85,40 +88,52 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
         navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } }) }) { inset ->
         Column(Modifier.padding(inset).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-            SettingsSection("导入") {
-            Surface(onClick = { file.launch(arrayOf("*/*")) }, enabled = !busy, shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Icon(Icons.Default.FolderOpen, null)
-                    Column {
-                        Text("选择文件", style = MaterialTheme.typography.titleMedium)
-                        Text("ICS、JSON 和备份", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            GroupTitle("导入")
+            TransferActionCard(Icons.Default.FolderOpen, "从文件导入", enabled = !busy, onClick = { file.launch(arrayOf("*/*")) },
+                modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth(), prominent = true)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TransferActionCard(Icons.Default.ContentPaste, "文本导入", enabled = !busy, onClick = { openSheet(ImportSheet.TEXT) }, modifier = Modifier.weight(1f))
+                TransferActionCard(Icons.Default.Link, "WakeUp 口令", enabled = !busy, onClick = { openSheet(ImportSheet.TOKEN) }, modifier = Modifier.weight(1f))
+            }
+            GroupTitle("导出")
+            Surface(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp, bottomEnd = 32.dp, bottomStart = 16.dp),
+                color = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Icon(Icons.Default.DataObject, null, Modifier.size(30.dp))
+                        Text("本应用 JSON", style = MaterialTheme.typography.headlineSmall)
+                    }
+                    val selected = all.firstOrNull { it.schedule.id == selectedJsonScheduleId }
+                    FilledTonalButton(onClick = { jsonScheduleId = selected?.schedule?.id; chooseJsonSchedule = true },
+                        enabled = all.isNotEmpty() && !busy, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth()) {
+                        Text(selected?.schedule?.name ?: "全部课表", Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Icon(Icons.Default.ExpandMore, null)
+                    }
+                    Button(onClick = { export("Schedule.json") { ScheduleExporter.appJson(selected?.let { listOf(it) } ?: all, vm.appearance.value) } },
+                        enabled = all.isNotEmpty() && !busy, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                        Icon(Icons.Default.Download, null); Spacer(Modifier.width(8.dp)); Text("导出 JSON")
                     }
                 }
             }
-            ActionRow(Icons.Default.ContentPaste, "粘贴文本", !busy, chevron = true) { openSheet(ImportSheet.TEXT) }
-            ActionRow(Icons.Default.Link, "WakeUp 分享口令", !busy, chevron = true) { openSheet(ImportSheet.TOKEN) }
-            }
             data?.let { current ->
-                SettingsSection("导出当前课表") {
-                ActionRow(Icons.Default.Download, "WakeUp JSON") { export("Schedule.json") { ScheduleExporter.json(current) } }
-                ActionRow(Icons.Default.Download, "ICS 日历") { export("Schedule.ics") { ScheduleExporter.ics(current) } }
-                ActionRow(Icons.Default.Share, "分享文本") {
-                    context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"; putExtra(Intent.EXTRA_TEXT, ScheduleExporter.legacy(current))
-                    }, "分享课表"))
+                TransferActionCard(Icons.Default.CalendarMonth, "ICS 日历", enabled = !busy,
+                    onClick = { export("Schedule.ics") { ScheduleExporter.ics(current) } },
+                    modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth().padding(top = 12.dp))
+                GroupTitle("WakeUp 兼容")
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TransferActionCard(Icons.Default.DataObject, "WakeUp JSON", onClick = { export("WakeUp-Schedule.json") { ScheduleExporter.json(current) } }, modifier = Modifier.weight(1f))
+                    TransferActionCard(Icons.Default.Share, "分享文本", onClick = {
+                        context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"; putExtra(Intent.EXTRA_TEXT, ScheduleExporter.legacy(current))
+                        }, "分享课表"))
+                    }, modifier = Modifier.weight(1f))
                 }
             }
-                }
-            SettingsSection("备份") {
-            ActionRow(Icons.Default.Download, "备份全部课表", all.isNotEmpty()) {
-                export("Schedule-backup.json") { ScheduleExporter.backup(all, vm.appearance.value) }
-            }
-            }
+
         }
     }
     when (sheet) {
-        ImportSheet.TEXT -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
+        ImportSheet.TEXT -> ModalBottomSheet(onDismissRequest = { sheet = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SheetTitle("粘贴文本", "解析", enabled = text.isNotBlank() && !busy) { vm.parseImport(text) }
                 OutlinedTextField(text, { text = it }, enabled = !busy, label = { Text("ICS、JSON 或分享文本") },
@@ -126,7 +141,7 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
                 if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             }
         }
-        ImportSheet.TOKEN -> ModalBottomSheet(onDismissRequest = { sheet = null }) {
+        ImportSheet.TOKEN -> ModalBottomSheet(onDismissRequest = { sheet = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
             Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
                 Box(Modifier.padding(horizontal = 16.dp)) { SheetTitle("WakeUp 分享口令") }
                 OutlinedTextField(text, { text = it }, enabled = !busy, label = { Text("口令或分享文案") },
@@ -142,10 +157,25 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
         }
         null -> {}
     }
+    if (chooseJsonSchedule) AlertDialog(onDismissRequest = { chooseJsonSchedule = false }, title = { Text("导出范围") }, text = {
+        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+            Row(Modifier.fillMaxWidth().clickable { jsonScheduleId = null }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = jsonScheduleId == null, onClick = { jsonScheduleId = null })
+                Text("全部课表", Modifier.padding(start = 8.dp))
+            }
+            all.forEach { schedule -> Row(Modifier.fillMaxWidth().clickable { jsonScheduleId = schedule.schedule.id }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = jsonScheduleId == schedule.schedule.id, onClick = { jsonScheduleId = schedule.schedule.id })
+                Text(schedule.schedule.name, Modifier.padding(start = 8.dp))
+            } }
+        }
+    }, confirmButton = { TextButton(onClick = {
+        selectedJsonScheduleId = jsonScheduleId
+        chooseJsonSchedule = false
+    }) { Text("确定") } }, dismissButton = { TextButton(onClick = { chooseJsonSchedule = false }) { Text("取消") } })
     pending?.let { schedules ->
         AlertDialog(onDismissRequest = vm::clearImport, title = { Text("导入课表") }, text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                schedules.forEach { Text("${it.schedule.name}，${it.courses.size} 门课程") }
+            Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                schedules.forEach { Text("${it.schedule.name}，${it.courses.size} 门课程，${it.todos.size} 项待办") }
             }
         }, confirmButton = { TextButton(onClick = { vm.acceptImport { toast("课表已导入") } }, enabled = !busy) { Text("导入") } },
             dismissButton = { TextButton(onClick = vm::clearImport, enabled = !busy) { Text("取消") } })
@@ -153,12 +183,15 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
 }
 
 @Composable
-private fun ActionRow(icon: ImageVector, title: String, enabled: Boolean = true, chevron: Boolean = false, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).heightIn(min = 64.dp).padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge,
-            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
-        if (chevron) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun TransferActionCard(icon: ImageVector, title: String, enabled: Boolean = true, onClick: () -> Unit, modifier: Modifier = Modifier, prominent: Boolean = false) {
+    Surface(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = if (prominent) 92.dp else 76.dp),
+        shape = if (prominent) RoundedCornerShape(topStart = 28.dp, topEnd = 20.dp, bottomEnd = 28.dp, bottomStart = 20.dp) else RoundedCornerShape(22.dp),
+        color = if (prominent) MaterialTheme.colorScheme.secondaryContainer else backgroundPanelColor(MaterialTheme.colorScheme.surfaceContainerHigh),
+        contentColor = if (prominent) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(icon, null, Modifier.size(24.dp))
+            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = LocalContentColor.current.copy(alpha = 0.72f))
+        }
     }
 }

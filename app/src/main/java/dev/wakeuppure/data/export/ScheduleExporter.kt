@@ -49,8 +49,11 @@ object ScheduleExporter {
         else put("courses", courses)
     }
 
-    fun backup(list: List<ScheduleData>, appearance: String = "system"): String =
+    fun appJson(list: List<ScheduleData>, appearance: String = "system"): String =
         codec.encodeToString(Backup(schedules = list, appearance = appearance))
+
+    /** Kept for callers and old file compatibility; this is the app's full JSON format. */
+    fun backup(list: List<ScheduleData>, appearance: String = "system"): String = appJson(list, appearance)
 
     fun restore(text: String): Backup {
         val root = codec.parseToJsonElement(text).jsonObject
@@ -78,6 +81,18 @@ object ScheduleExporter {
                     "SUMMARY:${escape(occurrence.course.name)}", "LOCATION:${escape(occurrence.classroom)}",
                     "DESCRIPTION:${escape(description)}", "END:VEVENT")
             }
+        }
+        data.todos.forEach { todo ->
+            val due = Instant.ofEpochMilli(todo.dueAt)
+            val courseName = todo.courseId?.let { id -> data.courses.firstOrNull { it.course.id == id }?.course?.name }
+            val description = listOfNotNull(courseName?.let { "关联课程：$it" }, if (todo.completed) "已完成" else null).joinToString("\n")
+            val identity = "${data.schedule.id}/todo/${todo.id}/${todo.dueAt}"
+            val uid = UUID.nameUUIDFromBytes(identity.toByteArray(Charsets.UTF_8))
+            lines += listOf("BEGIN:VTODO", "UID:$uid@wakeuppure.local",
+                "DTSTAMP:${utcTime.format(Instant.ofEpochMilli(data.schedule.updatedAt))}Z",
+                "DUE:${utcTime.format(due)}Z", "SUMMARY:${escape(todo.title)}",
+                "STATUS:${if (todo.completed) "COMPLETED" else "NEEDS-ACTION"}",
+                "DESCRIPTION:${escape(description)}", "END:VTODO")
         }
         lines += "END:VCALENDAR"
         return lines.joinToString("\r\n", postfix = "\r\n") { fold(it) }
