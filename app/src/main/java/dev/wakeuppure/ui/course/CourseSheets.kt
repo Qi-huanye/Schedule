@@ -15,8 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.wakeuppure.domain.model.*
-import dev.wakeuppure.domain.usecase.FixedLessonTime
-import dev.wakeuppure.domain.usecase.TimeSlotPlanner
 import dev.wakeuppure.ui.background.courseDisplayColors
 import dev.wakeuppure.ui.components.*
 
@@ -41,33 +39,25 @@ internal fun Set<Int>.weekSummary(): String = toWeekRanges().joinToString("、")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun PeriodSheet(initial: CoursePeriod, initialSlots: List<TimeSlot>, maxWeeks: Int, fixedMinutes: Int?, defaultRoom: String,
-    canDelete: Boolean, onDismiss: () -> Unit, onDelete: () -> Unit, onConfirm: (List<CoursePeriod>, List<TimeSlot>) -> Unit) {
+internal fun PeriodSheet(initial: CoursePeriod, initialSlots: List<TimeSlot>, maxWeeks: Int, defaultRoom: String,
+    canDelete: Boolean, onDismiss: () -> Unit, onDelete: () -> Unit, onConfirm: (List<CoursePeriod>) -> Unit) {
     var period by remember { mutableStateOf(initial) }
-    var slots by remember { mutableStateOf(initialSlots) }
     var sections by remember { mutableStateOf(RangePick(initial.startSection, initial.endSection)) }
     var selectedWeeks by remember { mutableStateOf((initial.startWeek..initial.endWeek).filter { it in 1..maxWeeks }.toSet()) }
-    var error by remember { mutableStateOf<String?>(null) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
             SheetTitle("上课时间", "确定") {
                 onConfirm(selectedWeeks.toWeekRanges().mapIndexed { index, range ->
                     period.copy(id = if (index == 0) initial.id else 0, startSection = sections.start, endSection = sections.end,
                         startWeek = range.first, endWeek = range.last)
-                }, slots)
+                })
             }
             SheetLabel("星期")
             SelectGrid((1..7).toList(), 7, { if (it == period.dayOfWeek) CellState.EDGE else CellState.NONE },
                 { period = period.copy(dayOfWeek = it) }, label = { WEEKDAYS[it - 1] }, describe = { "周${WEEKDAYS[it - 1]}" })
-            SheetLabel("节次", "${slots[sections.start - 1].startTime}–${slots[sections.end - 1].endTime}")
-            SelectGrid((1..slots.size).toList(), 5, { rangeState(it, sections.start, sections.end) }, { sections = sections.tap(it) },
-                describe = { "第 $it 节" }, trailing = if (slots.size < 30) { cell ->
-                    GridAddCell(cell, "增加一节") {
-                        runCatching { FixedLessonTime.apply(TimeSlotPlanner.resize(slots, slots.size + 1, initialSlots.size), fixedMinutes) }
-                            .onSuccess { slots = it; error = null }.onFailure { error = it.message }
-                    }
-                } else null)
-            error?.let { Text(it, Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            SheetLabel("节次", "${initialSlots[sections.start - 1].startTime}–${initialSlots[sections.end - 1].endTime}")
+            SelectGrid((1..initialSlots.size).toList(), 5, { rangeState(it, sections.start, sections.end) }, { sections = sections.tap(it) },
+                describe = { "第 $it 节" })
             SheetLabel("周次", selectedWeeks.weekSummary())
             Segments(WeekType.entries.map { it to WEEK_TYPES[it.ordinal] }, period.weekType, { period = period.copy(weekType = it) }, Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
