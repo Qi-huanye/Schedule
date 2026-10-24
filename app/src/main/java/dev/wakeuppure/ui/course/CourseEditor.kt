@@ -73,7 +73,7 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
                     Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("周${WEEKDAYS[period.dayOfWeek - 1]}，${period.startSection}–${period.endSection} 节", style = MaterialTheme.typography.titleMedium)
-                            Text(periodWeeks(period, course.classroom), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(periodWeeks(period, course.classroom, course.teacher), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "编辑上课时间 ${index + 1}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -88,7 +88,7 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
         }
     }
     editingPeriod?.let { index ->
-        PeriodSheet(periods[index], slots, data.schedule.maxWeeks, course.classroom,
+        PeriodSheet(periods[index], slots, data.schedule.maxWeeks, course.teacher, course.classroom,
             canDelete = periods.size > 1,
             onDismiss = { if (addedPeriod) periods.removeAt(index); addedPeriod = false; editingPeriod = null },
             onDelete = { periods.removeAt(index); addedPeriod = false; editingPeriod = null }) { updatedPeriods ->
@@ -105,8 +105,9 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
 }
 
 /** "第 3–18 周，单周，实验楼 101" — the room only when it differs from the course room. */
-internal fun periodWeeks(period: CoursePeriod, courseRoom: String): String = listOfNotNull(
+internal fun periodWeeks(period: CoursePeriod, courseRoom: String, courseTeacher: String = ""): String = listOfNotNull(
     "第 ${period.startWeek}–${period.endWeek} 周",
     WEEK_TYPES[period.weekType.ordinal].takeIf { period.weekType != WeekType.ALL },
+    period.teacher.takeIf { it.isNotBlank() && it != courseTeacher },
     period.classroom.takeIf { it.isNotBlank() && it != courseRoom },
 ).joinToString("，")

@@ -88,7 +88,7 @@ object WidgetUpdater {
         return views
     }
 
-    private fun occurrenceMeta(item: Occurrence): String = listOf(item.course.teacher, item.classroom)
+    private fun occurrenceMeta(item: Occurrence): String = listOf(item.teacher, item.classroom)
         .filter { it.isNotBlank() }.joinToString("  /  ").ifBlank { "${item.course.name}的课程安排" }
 
     private fun LocalTime.short(): String = toString().substring(0, 5)

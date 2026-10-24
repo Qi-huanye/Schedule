@@ -39,7 +39,7 @@ internal fun Set<Int>.weekSummary(): String = toWeekRanges().joinToString("、")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun PeriodSheet(initial: CoursePeriod, initialSlots: List<TimeSlot>, maxWeeks: Int, defaultRoom: String,
+internal fun PeriodSheet(initial: CoursePeriod, initialSlots: List<TimeSlot>, maxWeeks: Int, defaultTeacher: String, defaultRoom: String,
     canDelete: Boolean, onDismiss: () -> Unit, onDelete: () -> Unit, onConfirm: (List<CoursePeriod>) -> Unit) {
     var period by remember { mutableStateOf(initial) }
     var sections by remember { mutableStateOf(RangePick(initial.startSection, initial.endSection)) }
@@ -59,14 +59,29 @@ internal fun PeriodSheet(initial: CoursePeriod, initialSlots: List<TimeSlot>, ma
             SelectGrid((1..initialSlots.size).toList(), 5, { rangeState(it, sections.start, sections.end) }, { sections = sections.tap(it) },
                 describe = { "第 $it 节" })
             SheetLabel("周次", selectedWeeks.weekSummary())
-            Segments(WeekType.entries.map { it to WEEK_TYPES[it.ordinal] }, period.weekType, { period = period.copy(weekType = it) }, Modifier.fillMaxWidth())
+            Segments(WeekType.entries.map { it to WEEK_TYPES[it.ordinal] }, period.weekType, {
+                val bounds = selectedWeeks.toWeekRanges().let { ranges ->
+                    (ranges.firstOrNull()?.first ?: 1)..(ranges.lastOrNull()?.last ?: maxWeeks)
+                }
+                period = period.copy(weekType = it)
+                selectedWeeks = bounds.toSet()
+            }, Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
+            val bounds = selectedWeeks.toWeekRanges().let { ranges ->
+                (ranges.firstOrNull()?.first ?: 1)..(ranges.lastOrNull()?.last ?: maxWeeks)
+            }
             SelectGrid((1..maxWeeks).toList(), 5,
-                { if (it in selectedWeeks && period.weekType.includes(it)) CellState.EDGE else CellState.NONE },
-                { selectedWeeks = selectedWeeks.toggle(it) }, describe = { "第 $it 周" })
-            OutlinedTextField(period.classroom, { period = period.copy(classroom = it) }, label = { Text("教室") },
-                placeholder = if (defaultRoom.isNotBlank()) { { Text(defaultRoom) } } else null,
+                { if (period.weekType == WeekType.ALL) {
+                    if (it in selectedWeeks) CellState.EDGE else CellState.NONE
+                } else rangeState(it, bounds.first, bounds.last, period.weekType::includes) },
+                { selectedWeeks = if (period.weekType == WeekType.ALL) selectedWeeks.toggle(it)
+                    else (minOf(bounds.first, it)..maxOf(bounds.last, it)).toSet() }, describe = { "第 $it 周" })
+            OutlinedTextField(period.teacher, { period = period.copy(teacher = it) }, label = { Text("教师（可选）") },
+                placeholder = if (defaultTeacher.isNotBlank()) { { Text(defaultTeacher) } } else null,
                 singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
+            OutlinedTextField(period.classroom, { period = period.copy(classroom = it) }, label = { Text("教室（可选）") },
+                placeholder = if (defaultRoom.isNotBlank()) { { Text(defaultRoom) } } else null,
+                singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
             if (canDelete) TextButton(onClick = onDelete, modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp),
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("删除这个时间") }
         }
@@ -91,7 +106,7 @@ fun CourseDetailSheet(item: CourseWithPeriods, slots: List<TimeSlot>, onDismiss:
                 Text("周${WEEKDAYS[p.dayOfWeek - 1]} ${p.startSection}–${p.endSection} 节" + if (start != null && end != null) "，$start–$end" else "",
                     style = MaterialTheme.typography.bodyLarge)
                 val room = p.classroom.ifBlank { item.course.classroom }
-                Text(listOf(periodWeeks(p.copy(classroom = ""), ""), room).filter { it.isNotBlank() }.joinToString("\n"),
+                Text(listOf(periodWeeks(p.copy(classroom = ""), "", item.course.teacher), room).filter { it.isNotBlank() }.joinToString("\n"),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             val extra = listOf(item.course.teacher, item.course.note).filter { it.isNotBlank() }

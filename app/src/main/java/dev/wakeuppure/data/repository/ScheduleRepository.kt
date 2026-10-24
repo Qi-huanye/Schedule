@@ -155,6 +155,6 @@ class ScheduleRepository(private val db: PureDatabase) {
         require(period.startWeek in 1..maxWeeks && period.endWeek in period.startWeek..maxWeeks) { "Invalid week range" }
         require(period.startSection >= 1 && period.endSection >= period.startSection &&
             (period.startSection..period.endSection).all { section -> slots.any { it.section == section } }) { "Period references missing sections" }
-        require(period.classroom.length <= 200) { "Classroom text is too long" }
+        require(period.classroom.length <= 200 && period.teacher.length <= 200) { "Classroom text is too long" }
     }
 }

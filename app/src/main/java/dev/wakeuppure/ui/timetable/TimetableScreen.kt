@@ -200,7 +200,7 @@ private fun TimetableWeek(data: ScheduleData, layout: TimetableWeekLayout, now: 
                                         Text(course.course.name, fontSize = 13.sp, lineHeight = 16.sp, color = ink,
                                             fontWeight = FontWeight.Bold, maxLines = 4, overflow = TextOverflow.Ellipsis)
                                         val room = period.classroom.ifBlank { course.course.classroom }
-                                        val details = listOf(course.course.teacher, room).filter { it.isNotBlank() }.joinToString(" @ ")
+                                        val details = listOf(period.teacher.ifBlank { course.course.teacher }, room).filter { it.isNotBlank() }.joinToString(" @ ")
                                         if (details.isNotBlank()) Text(details, fontSize = 10.sp, lineHeight = 13.sp, color = ink.copy(alpha = .82f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     }
                                 }

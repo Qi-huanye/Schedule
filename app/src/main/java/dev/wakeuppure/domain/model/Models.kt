@@ -28,7 +28,7 @@ data class CoursePeriod(
     val id: Long = 0, val courseId: Long = 0, val dayOfWeek: Int = 1,
     val startSection: Int = 1, val endSection: Int = 2,
     val startWeek: Int = 1, val endWeek: Int = 16,
-    val weekType: WeekType = WeekType.ALL, val classroom: String = ""
+    val weekType: WeekType = WeekType.ALL, val classroom: String = "", val teacher: String = ""
 )
 
 @Serializable

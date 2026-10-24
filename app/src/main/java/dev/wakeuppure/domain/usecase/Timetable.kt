@@ -15,6 +15,7 @@ object WeekCalculator {
 data class Occurrence(val course: Course, val period: CoursePeriod,
     val date: LocalDate, val start: LocalDateTime, val end: LocalDateTime) {
     val classroom: String get() = period.classroom.ifBlank { course.classroom }
+    val teacher: String get() = period.teacher.ifBlank { course.teacher }
 }
 
 object CourseFilter {

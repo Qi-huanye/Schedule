@@ -114,7 +114,7 @@ private fun OccurrenceCard(o: Occurrence, index: Int, chip: String?, past: Boole
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("${o.start.toLocalTime()} – ${o.end.toLocalTime()}", style = MaterialTheme.typography.labelLarge)
                 Text(o.course.name, style = MaterialTheme.typography.titleLarge)
-                val detail = listOf(o.classroom, o.course.teacher).filter { it.isNotBlank() }.joinToString("\n")
+                val detail = listOf(o.classroom, o.teacher).filter { it.isNotBlank() }.joinToString("\n")
                 if (detail.isNotEmpty()) Text(detail, style = MaterialTheme.typography.bodyMedium)
                 if (chip != null) Text(chip, style = MaterialTheme.typography.labelLarge)
             }

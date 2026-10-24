@@ -36,7 +36,7 @@ object ScheduleExporter {
         })
         val courses = buildJsonArray {
             data.courses.forEach { item -> item.periods.forEach { period -> add(buildJsonObject {
-                put("name", item.course.name); put("teacher", item.course.teacher)
+                put("name", item.course.name); put("teacher", period.teacher.ifBlank { item.course.teacher })
                 put("position", period.classroom.ifBlank { item.course.classroom })
                 put("color", item.course.color); put("note", item.course.note)
                 put("day", period.dayOfWeek); put("startNode", period.startSection)
@@ -71,7 +71,7 @@ object ScheduleExporter {
                 val periodKey = if (occurrence.period.id != 0L) occurrence.period.id.toString() else "new-$periodIndex"
                 val identity = "${data.schedule.id}/$courseKey/$periodKey/${occurrence.date}"
                 val uid = UUID.nameUUIDFromBytes(identity.toByteArray(Charsets.UTF_8))
-                val description = listOf(occurrence.course.teacher, occurrence.course.note).filter { it.isNotBlank() }.joinToString("\n")
+                val description = listOf(occurrence.teacher, occurrence.course.note).filter { it.isNotBlank() }.joinToString("\n")
                 lines += listOf("BEGIN:VEVENT", "UID:$uid@wakeuppure.local",
                     "DTSTAMP:${utcTime.format(Instant.ofEpochMilli(data.schedule.updatedAt))}Z",
                     "DTSTART:${localTime.format(occurrence.start)}", "DTEND:${localTime.format(occurrence.end)}",

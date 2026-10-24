@@ -9,9 +9,9 @@ internal fun ScheduleEntity.model() = Schedule(id, name, semesterStartDate, maxW
 internal fun Course.entity() = CourseEntity(id, scheduleId, name, teacher, classroom, color, note)
 internal fun CourseEntity.model() = Course(id, scheduleId, name, teacher, classroom, color, note)
 internal fun CoursePeriod.entity() = CoursePeriodEntity(id, courseId, dayOfWeek, startSection,
-    endSection, startWeek, endWeek, weekType.name, classroom)
+    endSection, startWeek, endWeek, weekType.name, classroom, teacher)
 internal fun CoursePeriodEntity.model() = CoursePeriod(id, courseId, dayOfWeek, startSection,
-    endSection, startWeek, endWeek, WeekType.valueOf(weekType), classroom)
+    endSection, startWeek, endWeek, WeekType.valueOf(weekType), classroom, teacher)
 internal fun TimeSlot.entity(scheduleId: Long) = TimeSlotEntity(scheduleId, section, startTime, endTime)
 internal fun TimeSlotEntity.model() = TimeSlot(section, startTime, endTime)
 internal fun ScheduleRelation.model() = ScheduleData(schedule.model(), courses.sortedBy { it.course.id }.map {

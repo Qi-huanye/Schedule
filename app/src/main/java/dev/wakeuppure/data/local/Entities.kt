@@ -26,7 +26,7 @@ data class CourseEntity(
 data class CoursePeriodEntity(
     @PrimaryKey(autoGenerate = true) val id: Long, val courseId: Long,
     val dayOfWeek: Int, val startSection: Int, val endSection: Int,
-    val startWeek: Int, val endWeek: Int, val weekType: String, val classroom: String
+    val startWeek: Int, val endWeek: Int, val weekType: String, val classroom: String, val teacher: String
 )
 
 @Entity(tableName = "time_slots", primaryKeys = ["scheduleId", "section"],
