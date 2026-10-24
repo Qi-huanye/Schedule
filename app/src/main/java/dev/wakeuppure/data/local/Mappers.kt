@@ -3,9 +3,9 @@ package dev.wakeuppure.data.local
 import dev.wakeuppure.domain.model.*
 
 internal fun Schedule.entity() = ScheduleEntity(id, name, semesterStartDate, maxWeeks, current,
-    createdAt, updatedAt, showWeekend, firstDay, reminderMinutes, fixedLessonMinutes, colorPalette)
+    createdAt, updatedAt, showWeekend, firstDay, reminderMinutes, fixedLessonMinutes, colorPalette, todoReminderMinutes)
 internal fun ScheduleEntity.model() = Schedule(id, name, semesterStartDate, maxWeeks, current,
-    createdAt, updatedAt, showWeekend, firstDay, reminderMinutes, fixedLessonMinutes, colorPalette)
+    createdAt, updatedAt, showWeekend, firstDay, reminderMinutes, fixedLessonMinutes, colorPalette, todoReminderMinutes)
 internal fun Course.entity() = CourseEntity(id, scheduleId, name, teacher, classroom, color, note)
 internal fun CourseEntity.model() = Course(id, scheduleId, name, teacher, classroom, color, note)
 internal fun CoursePeriod.entity() = CoursePeriodEntity(id, courseId, dayOfWeek, startSection,
@@ -14,6 +14,8 @@ internal fun CoursePeriodEntity.model() = CoursePeriod(id, courseId, dayOfWeek, 
     endSection, startWeek, endWeek, WeekType.valueOf(weekType), classroom, teacher)
 internal fun TimeSlot.entity(scheduleId: Long) = TimeSlotEntity(scheduleId, section, startTime, endTime)
 internal fun TimeSlotEntity.model() = TimeSlot(section, startTime, endTime)
+internal fun Todo.entity() = TodoEntity(id, scheduleId, title, dueAt, courseId, completed)
+internal fun TodoEntity.model() = Todo(id, scheduleId, title, dueAt, courseId, completed)
 internal fun ScheduleRelation.model() = ScheduleData(schedule.model(), courses.sortedBy { it.course.id }.map {
     CourseWithPeriods(it.course.model(), it.periods.sortedBy { period -> period.id }.map(CoursePeriodEntity::model))
-}, slots.sortedBy { it.section }.map(TimeSlotEntity::model))
+}, slots.sortedBy { it.section }.map(TimeSlotEntity::model), todos.sortedBy { it.dueAt }.map(TodoEntity::model))

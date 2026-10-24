@@ -79,6 +79,23 @@ class ScheduleRepository(private val db: PureDatabase) {
 
     suspend fun deleteCourse(id: Long): Unit = db.withTransaction { dao.deleteCourse(id) }
 
+    suspend fun saveTodo(todo: Todo): Long = db.withTransaction {
+        val schedule = requireNotNull(dao.schedule(todo.scheduleId)) { "Schedule does not exist" }
+        require(todo.title.isNotBlank() && todo.title.length <= 200) { "Todo title must contain 1 to 200 characters" }
+        require(todo.dueAt > 0) { "Invalid due time" }
+        if (todo.id != 0L) {
+            val existing = requireNotNull(dao.todo(todo.id)) { "Todo does not exist" }
+            require(existing.scheduleId == todo.scheduleId) { "Todo belongs to another schedule" }
+        }
+        if (todo.courseId != null) {
+            val course = requireNotNull(dao.course(todo.courseId)) { "Course does not exist" }
+            require(course.scheduleId == todo.scheduleId && schedule.id == course.scheduleId) { "Course belongs to another schedule" }
+        }
+        if (todo.id == 0L) dao.insertTodo(todo.entity()) else { dao.updateTodo(todo.entity()); todo.id }
+    }
+
+    suspend fun deleteTodo(id: Long): Unit = db.withTransaction { dao.deleteTodo(id) }
+
     suspend fun importSchedules(data: List<ScheduleData>): List<Long> = db.withTransaction {
         require(data.size <= 100) { "Too many schedules" }
         val result = data.map { incoming ->
@@ -86,6 +103,7 @@ class ScheduleRepository(private val db: PureDatabase) {
             require(incoming.courses.size <= 5000) { "Too many courses" }
             val id = dao.insertSchedule(incoming.schedule.copy(id = 0, current = false).entity())
             dao.insertSlots(incoming.timeSlots.map { it.entity(id) })
+            val importedCourseIds = mutableMapOf<Long, Long>()
             incoming.courses.forEach { item ->
                 validateCourse(item.course)
                 require(item.course.scheduleId == 0L || item.course.scheduleId == incoming.schedule.id) { "Course belongs to another schedule" }
@@ -95,7 +113,15 @@ class ScheduleRepository(private val db: PureDatabase) {
                     validatePeriod(period, incoming.schedule.maxWeeks, incoming.timeSlots)
                 }
                 val courseId = dao.insertCourse(item.course.copy(id = 0, scheduleId = id).entity())
+                importedCourseIds[item.course.id] = courseId
                 dao.insertPeriods(normalizePeriods(item.periods, courseId).map { it.entity() })
+            }
+            require(incoming.todos.size <= 10000) { "Too many todos" }
+            incoming.todos.forEach { todo ->
+                require(todo.title.isNotBlank() && todo.title.length <= 200 && todo.dueAt > 0) { "Invalid todo" }
+                val courseId = todo.courseId?.let { oldId -> importedCourseIds[oldId]
+                    ?: throw IllegalArgumentException("Todo refers to a missing course") }
+                dao.insertTodo(todo.copy(id = 0, scheduleId = id, courseId = courseId).entity())
             }
             if (incoming.schedule.current) {
                 dao.clearCurrent()
@@ -128,6 +154,7 @@ class ScheduleRepository(private val db: PureDatabase) {
         require(schedule.maxWeeks in 1..60) { "Maximum weeks must be between 1 and 60" }
         require(schedule.firstDay in 1..7) { "Invalid first day" }
         require(schedule.reminderMinutes == null || schedule.reminderMinutes in 0..1440) { "Invalid reminder minutes" }
+        require(schedule.todoReminderMinutes == null || schedule.todoReminderMinutes in 0..1440) { "Invalid todo reminder minutes" }
         require(slots.isNotEmpty() && slots.size <= 30) { "Timetable must contain 1 to 30 sections" }
         val ordered = slots.sortedBy { it.section }
         require(ordered.map { it.section } == (1..ordered.size).toList()) { "Sections must be unique and consecutive" }
