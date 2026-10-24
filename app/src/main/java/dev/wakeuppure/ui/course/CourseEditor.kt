@@ -91,8 +91,9 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
         PeriodSheet(periods[index], slots, data.schedule.maxWeeks, data.schedule.fixedLessonMinutes, course.classroom,
             canDelete = periods.size > 1,
             onDismiss = { if (addedPeriod) periods.removeAt(index); addedPeriod = false; editingPeriod = null },
-            onDelete = { periods.removeAt(index); addedPeriod = false; editingPeriod = null }) { period, updatedSlots ->
-            periods[index] = period
+            onDelete = { periods.removeAt(index); addedPeriod = false; editingPeriod = null }) { updatedPeriods, updatedSlots ->
+            periods.removeAt(index)
+            periods.addAll(index, updatedPeriods)
             slots = updatedSlots
             addedPeriod = false
             editingPeriod = null

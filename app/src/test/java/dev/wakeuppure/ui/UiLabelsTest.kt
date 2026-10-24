@@ -6,6 +6,8 @@ import dev.wakeuppure.ui.components.CellState
 import dev.wakeuppure.ui.components.RangePick
 import dev.wakeuppure.ui.components.rangeState
 import dev.wakeuppure.ui.course.periodWeeks
+import dev.wakeuppure.ui.course.toWeekRanges
+import dev.wakeuppure.ui.course.weekSummary
 import dev.wakeuppure.ui.today.dayLabel
 import dev.wakeuppure.ui.today.relativeStart
 import org.junit.Assert.assertEquals
@@ -42,6 +44,12 @@ class UiLabelsTest {
         assertEquals("明天 08:00", dayLabel(today, LocalDateTime.of(2026, 10, 10, 8, 0)))
         assertEquals("周日 10:00", dayLabel(today, LocalDateTime.of(2026, 10, 11, 10, 0)))
         assertEquals("10月20日 08:00", dayLabel(today, LocalDateTime.of(2026, 10, 20, 8, 0)))
+    }
+
+    @Test fun discontinuousWeeksSplitIntoContiguousPeriods() {
+        val weeks = setOf(1, 2, 3, 4, 9, 10, 11, 13)
+        assertEquals(listOf(1..4, 9..11, 13..13), weeks.toWeekRanges())
+        assertEquals("第 1–4 周、第 9–11 周、第 13 周", weeks.weekSummary())
     }
 
     @Test fun periodSummaryShowsOnlyDifferences() {

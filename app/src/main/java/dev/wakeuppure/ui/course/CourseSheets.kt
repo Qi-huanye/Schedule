@@ -26,19 +26,35 @@ private fun WeekType.includes(week: Int) = when (this) {
     WeekType.EVEN -> week % 2 == 0
 }
 
+internal fun Set<Int>.toggle(week: Int): Set<Int> = if (week in this && size > 1) this - week else this + week
+
+internal fun Set<Int>.toWeekRanges(): List<IntRange> = sorted().fold(mutableListOf()) { ranges, week ->
+    val previous = ranges.lastOrNull()
+    if (previous != null && week == previous.last + 1) ranges[ranges.lastIndex] = previous.first..week
+    else ranges += week..week
+    ranges
+}
+
+internal fun Set<Int>.weekSummary(): String = toWeekRanges().joinToString("、") { range ->
+    if (range.first == range.last) "第 ${range.first} 周" else "第 ${range.first}–${range.last} 周"
+}.ifBlank { "未选择周次" }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PeriodSheet(initial: CoursePeriod, initialSlots: List<TimeSlot>, maxWeeks: Int, fixedMinutes: Int?, defaultRoom: String,
-    canDelete: Boolean, onDismiss: () -> Unit, onDelete: () -> Unit, onConfirm: (CoursePeriod, List<TimeSlot>) -> Unit) {
+    canDelete: Boolean, onDismiss: () -> Unit, onDelete: () -> Unit, onConfirm: (List<CoursePeriod>, List<TimeSlot>) -> Unit) {
     var period by remember { mutableStateOf(initial) }
     var slots by remember { mutableStateOf(initialSlots) }
     var sections by remember { mutableStateOf(RangePick(initial.startSection, initial.endSection)) }
-    var weeks by remember { mutableStateOf(RangePick(initial.startWeek.coerceAtMost(maxWeeks), initial.endWeek.coerceAtMost(maxWeeks))) }
+    var selectedWeeks by remember { mutableStateOf((initial.startWeek..initial.endWeek).filter { it in 1..maxWeeks }.toSet()) }
     var error by remember { mutableStateOf<String?>(null) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
             SheetTitle("上课时间", "确定") {
-                onConfirm(period.copy(startSection = sections.start, endSection = sections.end, startWeek = weeks.start, endWeek = weeks.end), slots)
+                onConfirm(selectedWeeks.toWeekRanges().mapIndexed { index, range ->
+                    period.copy(id = if (index == 0) initial.id else 0, startSection = sections.start, endSection = sections.end,
+                        startWeek = range.first, endWeek = range.last)
+                }, slots)
             }
             SheetLabel("星期")
             SelectGrid((1..7).toList(), 7, { if (it == period.dayOfWeek) CellState.EDGE else CellState.NONE },
@@ -52,11 +68,12 @@ internal fun PeriodSheet(initial: CoursePeriod, initialSlots: List<TimeSlot>, ma
                     }
                 } else null)
             error?.let { Text(it, Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            SheetLabel("周次", "第 ${weeks.start}–${weeks.end} 周")
+            SheetLabel("周次", selectedWeeks.weekSummary())
             Segments(WeekType.entries.map { it to WEEK_TYPES[it.ordinal] }, period.weekType, { period = period.copy(weekType = it) }, Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
-            SelectGrid((1..maxWeeks).toList(), 5, { rangeState(it, weeks.start, weeks.end, period.weekType::includes) },
-                { weeks = weeks.tap(it) }, describe = { "第 $it 周" })
+            SelectGrid((1..maxWeeks).toList(), 5,
+                { if (it in selectedWeeks && period.weekType.includes(it)) CellState.EDGE else CellState.NONE },
+                { selectedWeeks = selectedWeeks.toggle(it) }, describe = { "第 $it 周" })
             OutlinedTextField(period.classroom, { period = period.copy(classroom = it) }, label = { Text("教室") },
                 placeholder = if (defaultRoom.isNotBlank()) { { Text(defaultRoom) } } else null,
                 singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
