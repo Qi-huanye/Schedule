@@ -4,4 +4,6 @@
     <color name="splash_ink">#176B60</color>
     <color name="splash_accent">#526500</color>
     <color name="launcher_background">#176B60</color>
+    <color name="widget_on_surface">#17342E</color>
+    <color name="widget_on_surface_variant">#46635B</color>
 </resources>

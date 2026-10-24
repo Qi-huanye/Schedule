@@ -16,11 +16,11 @@
             android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" />
         </provider>
-        <receiver android:name=".widget.TodayWidget" android:label="今日课程" android:exported="false">
+        <receiver android:name=".widget.TodayWidget" android:label="当前与下一节" android:exported="false">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/today_widget" />
         </receiver>
-        <receiver android:name=".widget.NextWidget" android:label="下一节课" android:exported="false">
+        <receiver android:name=".widget.NextWidget" android:label="今日课表" android:exported="false">
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/next_widget" />
         </receiver>
