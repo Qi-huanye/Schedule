@@ -29,6 +29,7 @@ import dev.wakeuppure.ui.components.SegmentRow
 import dev.wakeuppure.ui.components.SettingRow
 import dev.wakeuppure.ui.components.SwitchRow
 import kotlin.math.roundToInt
+import androidx.core.graphics.toColorInt
 
 val LocalBackgroundActive = staticCompositionLocalOf { false }
 val LocalCourseColors = staticCompositionLocalOf<List<Int>?> { null }
@@ -94,7 +95,7 @@ fun BackgroundContainer(state: BackgroundUiState?, dark: Boolean, content: @Comp
     ) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             if (active && layers != null) {
-                val image = remember(state!!.bitmap) { state.bitmap!!.asImageBitmap() }
+                val image = remember(state.bitmap) { state.bitmap!!.asImageBitmap() }
                 // A constant overscan hides the transparent fringe blur leaves at the edges; keeping it at
                 // every blur level means the photo never jumps in size while the slider moves.
                 val softened = Modifier.graphicsLayer { scaleX = 1.08f; scaleY = 1.08f }
@@ -156,7 +157,7 @@ fun courseDisplayColors(courseId: Long, storedColor: String): Pair<Color, Color>
         val argb = palette[Math.floorMod(courseId, palette.size.toLong()).toInt()]
         return Color(argb).copy(alpha = cardAlpha) to Color(contrastingTextColor(argb))
     }
-    val base = runCatching { Color(android.graphics.Color.parseColor(storedColor)) }.getOrDefault(Color(0xFFC1E8DE))
+    val base = runCatching { Color(storedColor.toColorInt()) }.getOrDefault(Color(0xFFC1E8DE))
     if (LocalBackgroundActive.current) {
         // Imported courses may contain translucent ARGB colors. Give their text a reliable
         // backing over photos, while leaving the stored color and ordinary rendering intact.
