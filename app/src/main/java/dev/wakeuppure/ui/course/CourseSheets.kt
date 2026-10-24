@@ -24,33 +24,17 @@ private fun WeekType.includes(week: Int) = when (this) {
     WeekType.EVEN -> week % 2 == 0
 }
 
-internal fun Set<Int>.toggle(week: Int): Set<Int> = if (week in this && size > 1) this - week else this + week
-
-internal fun Set<Int>.toWeekRanges(): List<IntRange> = sorted().fold(mutableListOf()) { ranges, week ->
-    val previous = ranges.lastOrNull()
-    if (previous != null && week == previous.last + 1) ranges[ranges.lastIndex] = previous.first..week
-    else ranges += week..week
-    ranges
-}
-
-internal fun Set<Int>.weekSummary(): String = toWeekRanges().joinToString("、") { range ->
-    if (range.first == range.last) "第 ${range.first} 周" else "第 ${range.first}–${range.last} 周"
-}.ifBlank { "未选择周次" }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PeriodSheet(initial: CoursePeriod, initialSlots: List<TimeSlot>, maxWeeks: Int, defaultTeacher: String, defaultRoom: String,
     canDelete: Boolean, onDismiss: () -> Unit, onDelete: () -> Unit, onConfirm: (List<CoursePeriod>) -> Unit) {
     var period by remember { mutableStateOf(initial) }
     var sections by remember { mutableStateOf(RangePick(initial.startSection, initial.endSection)) }
-    var selectedWeeks by remember { mutableStateOf((initial.startWeek..initial.endWeek).filter { it in 1..maxWeeks }.toSet()) }
+    var weeks by remember { mutableStateOf(RangePick(initial.startWeek.coerceIn(1, maxWeeks), initial.endWeek.coerceIn(1, maxWeeks))) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
             SheetTitle("上课时间", "确定") {
-                onConfirm(selectedWeeks.toWeekRanges().mapIndexed { index, range ->
-                    period.copy(id = if (index == 0) initial.id else 0, startSection = sections.start, endSection = sections.end,
-                        startWeek = range.first, endWeek = range.last)
-                })
+                onConfirm(listOf(period.copy(startSection = sections.start, endSection = sections.end, startWeek = weeks.start, endWeek = weeks.end)))
             }
             SheetLabel("星期")
             SelectGrid((1..7).toList(), 7, { if (it == period.dayOfWeek) CellState.EDGE else CellState.NONE },
@@ -58,24 +42,11 @@ internal fun PeriodSheet(initial: CoursePeriod, initialSlots: List<TimeSlot>, ma
             SheetLabel("节次", "${initialSlots[sections.start - 1].startTime}–${initialSlots[sections.end - 1].endTime}")
             SelectGrid((1..initialSlots.size).toList(), 5, { rangeState(it, sections.start, sections.end) }, { sections = sections.tap(it) },
                 describe = { "第 $it 节" })
-            SheetLabel("周次", selectedWeeks.weekSummary())
-            Segments(WeekType.entries.map { it to WEEK_TYPES[it.ordinal] }, period.weekType, {
-                val bounds = selectedWeeks.toWeekRanges().let { ranges ->
-                    (ranges.firstOrNull()?.first ?: 1)..(ranges.lastOrNull()?.last ?: maxWeeks)
-                }
-                period = period.copy(weekType = it)
-                selectedWeeks = bounds.toSet()
-            }, Modifier.fillMaxWidth())
+            SheetLabel("周次", "第 ${weeks.start}–${weeks.end} 周")
+            Segments(WeekType.entries.map { it to WEEK_TYPES[it.ordinal] }, period.weekType, { period = period.copy(weekType = it) }, Modifier.fillMaxWidth())
             Spacer(Modifier.height(8.dp))
-            val bounds = selectedWeeks.toWeekRanges().let { ranges ->
-                (ranges.firstOrNull()?.first ?: 1)..(ranges.lastOrNull()?.last ?: maxWeeks)
-            }
-            SelectGrid((1..maxWeeks).toList(), 5,
-                { if (period.weekType == WeekType.ALL) {
-                    if (it in selectedWeeks) CellState.EDGE else CellState.NONE
-                } else rangeState(it, bounds.first, bounds.last, period.weekType::includes) },
-                { selectedWeeks = if (period.weekType == WeekType.ALL) selectedWeeks.toggle(it)
-                    else (minOf(bounds.first, it)..maxOf(bounds.last, it)).toSet() }, describe = { "第 $it 周" })
+            SelectGrid((1..maxWeeks).toList(), 5, { rangeState(it, weeks.start, weeks.end, period.weekType::includes) },
+                { weeks = weeks.tap(it) }, describe = { "第 $it 周" })
             OutlinedTextField(period.teacher, { period = period.copy(teacher = it) }, label = { Text("教师（可选）") },
                 placeholder = if (defaultTeacher.isNotBlank()) { { Text(defaultTeacher) } } else null,
                 singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
@@ -103,15 +74,12 @@ fun CourseDetailSheet(item: CourseWithPeriods, slots: List<TimeSlot>, onDismiss:
                 val start = slots.find { it.section == p.startSection }?.startTime
                 val end = slots.find { it.section == p.endSection }?.endTime
                 Spacer(Modifier.height(6.dp))
-                Text("周${WEEKDAYS[p.dayOfWeek - 1]} ${p.startSection}–${p.endSection} 节" + if (start != null && end != null) "，$start–$end" else "",
-                    style = MaterialTheme.typography.bodyLarge)
+                Text("周${WEEKDAYS[p.dayOfWeek - 1]} ${p.startSection}–${p.endSection} 节" + if (start != null && end != null) "，$start–$end" else "", style = MaterialTheme.typography.bodyLarge)
                 val room = p.classroom.ifBlank { item.course.classroom }
-                Text(listOf(periodWeeks(p.copy(classroom = ""), "", item.course.teacher), room).filter { it.isNotBlank() }.joinToString("\n"),
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(listOf(periodWeeks(p.copy(classroom = ""), "", item.course.teacher), room).filter { it.isNotBlank() }.joinToString("\n"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             val extra = listOf(item.course.teacher, item.course.note).filter { it.isNotBlank() }
-            if (extra.isNotEmpty()) Text(extra.joinToString("\n"), Modifier.padding(top = 8.dp),
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (extra.isNotEmpty()) Text(extra.joinToString("\n"), Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
