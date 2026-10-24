@@ -103,7 +103,7 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
         else -> if (data != null) when (sheet) {
             "name" -> RenameDialog(data.schedule.name, close) { name -> update { it.copy(name = name) }; close() }
             "term" -> TermSheet(data, busy, close) { schedule, preserve, offset -> vm.saveSchedule(schedule, data.timeSlots, preserve, offset) { close() } }
-            "palette" -> PaletteSheet(if (followsBackground) FOLLOW_BACKGROUND else data.schedule.colorPalette,
+            "palette" -> PaletteSheet(data.schedule.colorPalette, followsBackground, data.courses.map { hexColor(it.course.color) },
                 background.colors?.lightCourses?.takeIf { background.hasImage }, close) { choice ->
                 close()
                 if (choice == FOLLOW_BACKGROUND) backgrounds.setCourseTheme(true)

@@ -5,14 +5,11 @@ package dev.wakeuppure.ui.settings
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.ui.background.imageColorScheme
@@ -29,14 +26,7 @@ internal fun ThemePresetSheet(theme: ThemeSettings, onDismiss: () -> Unit, onSel
                 val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
                 val scheme = remember(preset, dark) { imageColorScheme(preset.seed, dark) }
                 val selected = theme.source == ThemeSource.PRESET && theme.preset == preset.id
-                Surface(shape = MaterialTheme.shapes.large, color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).selectable(selected, role = Role.RadioButton, onClick = { onSelect(preset.id) })) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        RadioButton(selected, onClick = null)
-                        Text(preset.name, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                        Swatches(listOf(scheme.primary, scheme.primaryContainer, scheme.tertiary))
-                    }
-                }
+                ColorPaletteOption(preset.name, listOf(scheme.primary, scheme.primaryContainer, scheme.tertiary), selected) { onSelect(preset.id) }
             }
         }
     }

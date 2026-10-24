@@ -113,6 +113,53 @@ class DesignRefinementTest {
         compose.runOnIdle { assertEquals("green", selected) }
     }
 
+    @Test fun coursePaletteUsesSelectableCardsAndWaitsForConfirmation() {
+        var confirmed = ""
+        compose.setContent { PureTheme("light") {
+            PaletteSheet("soft", false, emptyList(), listOf(0xFF176B60.toInt()), {}, { confirmed = it })
+        } }
+        compose.onNode(hasText("柔和缤纷") and isSelectable()).assertIsSelected()
+        compose.onNode(hasText("跟随背景") and isSelectable()).performClick().assertIsSelected()
+        compose.runOnIdle { assertEquals("", confirmed) }
+        compose.onNodeWithText("保留现有颜色").assertDoesNotExist()
+        compose.onNodeWithText("当前课程颜色").assertDoesNotExist()
+        val last = compose.onNode(hasText("暖日桃橙") and isSelectable())
+        last.assertIsDisplayed()
+        val full = last.getUnclippedBoundsInRoot()
+        val visible = last.getBoundsInRoot()
+        assertEquals((full.bottom - full.top).value, (visible.bottom - visible.top).value, 0.5f)
+        compose.onNodeWithText("确定").performClick()
+        compose.runOnIdle { assertEquals(FOLLOW_BACKGROUND, confirmed) }
+    }
+
+    @Test fun coursePaletteCanScrollToTheLastChoiceWithLargeText() {
+        var confirmed = ""
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                PureTheme("light") {
+                    PaletteSheet("custom", false, listOf(androidx.compose.ui.graphics.Color.Red), null, {}, { confirmed = it })
+                }
+            }
+        }
+        compose.onNodeWithText("跟随背景").assertDoesNotExist()
+        compose.onNode(hasText("暖日桃橙") and isSelectable()).performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithText("确定").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals("sunset", confirmed) }
+    }
+
+    @Test fun customCourseColorsCanBeRestoredFromTheBackgroundWithoutOfferingAReset() {
+        var confirmed = ""
+        compose.setContent { PureTheme("light") {
+            PaletteSheet("custom", true, listOf(androidx.compose.ui.graphics.Color.Red), listOf(0xFF176B60.toInt()), {}, { confirmed = it })
+        } }
+        compose.onNode(hasText("跟随背景") and isSelectable()).assertIsSelected()
+        compose.onNodeWithText("保留现有颜色").assertDoesNotExist()
+        compose.onNode(hasText("当前课程颜色") and isSelectable()).performClick().assertIsSelected()
+        compose.onNodeWithText("确定").performClick()
+        compose.runOnIdle { assertEquals("custom", confirmed) }
+    }
+
     @Test fun presetThemeIsUsedWithoutSystemColors() {
         var primary = androidx.compose.ui.graphics.Color.Unspecified
         compose.setContent { PureTheme("light", theme = ThemeSettings(ThemeSource.PRESET, "rose")) {

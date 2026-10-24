@@ -2,13 +2,14 @@
 
 package dev.wakeuppure.ui.settings
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,26 +27,25 @@ internal fun RenameDialog(name: String, onDismiss: () -> Unit, onConfirm: (Strin
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
 }
 
-/** Course colors in one place: a stored palette, the stored colors as-is, or (with a background) image colors. */
+/** Show stored custom colors alongside presets when the current schedule uses them. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun PaletteSheet(selected: String, backgroundColors: List<Int>?, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
-    var choice by remember { mutableStateOf(selected) }
+internal fun PaletteSheet(palette: String, followsBackground: Boolean, courseColors: List<Color>, backgroundColors: List<Int>?,
+    onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    val selected = if (followsBackground && backgroundColors != null) FOLLOW_BACKGROUND else palette
+    var choice by rememberSaveable(selected) { mutableStateOf(selected) }
     val options = buildList {
         if (backgroundColors != null) add(Triple(FOLLOW_BACKGROUND, "跟随背景", backgroundColors.map { Color(it) }))
+        if (palette == "custom") add(Triple("custom", "当前课程颜色", courseColors.distinct()))
         CoursePalettes.all.forEach { add(Triple(it.id, it.name, it.colors.map(::hexColor))) }
-        add(Triple("custom", "保留现有颜色", emptyList()))
     }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
-            Box(Modifier.padding(horizontal = 16.dp)) { SheetTitle("课程配色", "确定") { onConfirm(choice) } }
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).selectableGroup().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+            SheetTitle("课程配色", "确定") { onConfirm(choice) }
+            Text("选择后点击确定应用。预设配色会替换各课程的颜色。", style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 16.dp))
             options.forEach { (id, name, colors) ->
-                Row(Modifier.fillMaxWidth().clickable { choice = id }.heightIn(min = 52.dp).padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = choice == id, onClick = { choice = id })
-                    Text(name, Modifier.weight(1f))
-                    Box(Modifier.padding(end = 8.dp)) { Swatches(colors.take(6)) }
-                }
+                ColorPaletteOption(name, colors.take(6), choice == id) { choice = id }
             }
         }
     }
