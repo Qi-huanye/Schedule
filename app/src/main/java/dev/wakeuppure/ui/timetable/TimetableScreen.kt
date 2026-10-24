@@ -75,7 +75,7 @@ fun TimetableScreen(timetable: PreparedTimetable, all: List<ScheduleData>, now: 
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxWidth().background(backgroundChromeColor())) {
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f).clip(MaterialTheme.shapes.large).clickable { panel = true }.padding(4.dp)) {
+                Column(Modifier.weight(1f).padding(4.dp).clip(MaterialTheme.shapes.large).clickable { panel = true }.padding(horizontal = 8.dp, vertical = 4.dp)) {
                     Text(data.schedule.name, style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Row(verticalAlignment = Alignment.CenterVertically) {
