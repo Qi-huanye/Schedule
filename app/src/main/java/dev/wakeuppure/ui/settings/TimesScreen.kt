@@ -14,6 +14,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.material.icons.outlined.Keyboard
+import androidx.compose.material.icons.outlined.Schedule
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.domain.usecase.FixedLessonTime
 import dev.wakeuppure.domain.usecase.TimeSlotPlanner
@@ -76,7 +81,8 @@ fun TimesScreen(data: ScheduleData, busy: Boolean, onClose: () -> Unit, onSave: 
     }
     picking?.let { (index, isStart) ->
         val slot = slots[index]
-        TimeDialog(if (isStart) slot.startTime else slot.endTime, { picking = null }) { time ->
+        LessonTimeDialog(if (isStart) slot.startTime else slot.endTime,
+            "第 ${slot.section} 节${if (isStart) "开始" else "结束"}时间", { picking = null }) { time ->
             slots[index] = if (isStart) slot.copy(startTime = time, endTime = if (fixed) end(time) else slot.endTime) else slot.copy(endTime = time)
             picking = null
         }
@@ -85,10 +91,26 @@ fun TimesScreen(data: ScheduleData, busy: Boolean, onClose: () -> Unit, onSave: 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimeDialog(value: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
+internal fun LessonTimeDialog(value: String, fieldLabel: String, onDismiss: () -> Unit, onPick: (String) -> Unit) {
     val initial = runCatching { LocalTime.parse(value) }.getOrDefault(LocalTime.of(8, 0))
     val state = rememberTimePickerState(initial.hour, initial.minute, is24Hour = true)
-    AlertDialog(onDismissRequest = onDismiss, text = { TimePicker(state) },
+    val density = LocalDensity.current
+    val height = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
+    val compact = height < 560.dp || density.fontScale > 1.3f
+    var inputMode by rememberSaveable(compact) { mutableStateOf(compact) }
+    TimePickerDialog(onDismissRequest = onDismiss,
+        title = { Column(Modifier.padding(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(if (inputMode) "输入时间" else "选择时间", style = MaterialTheme.typography.labelMedium)
+            Text(fieldLabel, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } },
+        modeToggleButton = { IconButton(onClick = { inputMode = !inputMode }) {
+            Icon(if (inputMode) Icons.Outlined.Schedule else Icons.Outlined.Keyboard,
+                if (inputMode) "切换为时钟选择" else "切换为键盘输入")
+        } },
         confirmButton = { TextButton(onClick = { onPick("%02d:%02d".format(state.hour, state.minute)) }) { Text("确定") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }) {
+        Column(Modifier.heightIn(max = (height - 220.dp).coerceAtLeast(160.dp)).verticalScroll(rememberScrollState())) {
+            if (inputMode) TimeInput(state) else TimePicker(state)
+        }
+    }
 }

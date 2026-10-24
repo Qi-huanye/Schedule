@@ -34,6 +34,7 @@ data class AppUpdateState(
     val release: AppRelease? = null,
     val message: String? = null,
     val download: UpdateDownload = UpdateDownload.Idle,
+    val availableRelease: AppRelease? = null,
 )
 
 class AppUpdateViewModel(
@@ -81,6 +82,7 @@ class AppUpdateViewModel(
                 val skipped = release?.version?.substringBefore('+') == preferences.getString("skipped_version", null)
                 mutableState.update { state ->
                     state.copy(
+                        availableRelease = release.takeIf { newer },
                         release = release.takeIf { newer && (manual || (!skipped && state.autoCheckEnabled)) },
                         message = if (!manual || newer) null else if (release == null)
                             "暂未找到可用的正式版本" else "已是最新版本",
@@ -106,6 +108,10 @@ class AppUpdateViewModel(
     fun dismissUpdate() {
         downloadJob?.cancel()
         mutableState.update { it.copy(release = null, download = UpdateDownload.Idle) }
+    }
+
+    fun showAvailableUpdate() {
+        mutableState.update { it.copy(release = it.availableRelease, message = null) }
     }
 
     fun download() {

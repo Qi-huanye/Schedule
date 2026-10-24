@@ -26,17 +26,6 @@ internal fun RenameDialog(name: String, onDismiss: () -> Unit, onConfirm: (Strin
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
 }
 
-@Composable
-internal fun LicensesDialog(onDismiss: () -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, title = { Text("开源许可与隐私") }, text = {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("开源课程表 · 无广告 · 无账号 · 无追踪\n课表保存在本机。检查更新时连接 GitHub，分享口令导入时访问对应服务。背景图片只保存在本机，课表备份不包含背景。")
-            Text("协议算法参考 WakeUpDecoder（Apache-2.0）。架构与格式研究参考 Sleepy；更多信息见项目 README。",
-                style = MaterialTheme.typography.bodySmall)
-        }
-    }, confirmButton = { TextButton(onClick = onDismiss) { Text("知道了") } })
-}
-
 /** Course colors in one place: a stored palette, the stored colors as-is, or (with a background) image colors. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -8,6 +8,7 @@ import dev.wakeuppure.data.local.ScheduleCache
 import dev.wakeuppure.data.local.PreparedTimetable
 import dev.wakeuppure.data.local.TimetableCache
 import dev.wakeuppure.data.repository.ScheduleRepository
+import dev.wakeuppure.data.repository.ThemePreferences
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.data.wakeup.json.WakeUpJsonImporter
 import dev.wakeuppure.data.wakeup.legacy.LegacyWakeUpImporter
@@ -74,6 +75,9 @@ class PureViewModel(
     private var pendingAppearance: String? = null
     private val prefs = application.getSharedPreferences("preferences", 0)
     val appearance = MutableStateFlow(prefs.getString("appearance", "system") ?: "system")
+    private val themePreferences = ThemePreferences(application)
+    private val mutableTheme = MutableStateFlow(themePreferences.read())
+    val themeSettings = mutableTheme.asStateFlow()
     val experimentalToken = MutableStateFlow(prefs.getBoolean("experimentalToken", false))
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; prettyPrint = true }
     private val shares = WakeUpShareRepository(WakeUpTokenImporter(AndroidDeviceIdentityProvider(application)))
@@ -89,6 +93,14 @@ class PureViewModel(
     }
 
     fun setAppearance(value: String) { appearance.value = value; prefs.edit().putString("appearance", value).apply() }
+    fun setSystemColors(enabled: Boolean) {
+        mutableTheme.update { it.copy(source = if (enabled) ThemeSource.SYSTEM else ThemeSource.PRESET) }
+        themePreferences.save(mutableTheme.value)
+    }
+    fun setThemePreset(id: String) {
+        mutableTheme.value = ThemeSettings(ThemeSource.PRESET, ThemePresets.find(id).id)
+        themePreferences.save(mutableTheme.value)
+    }
     fun setExperimentalToken(value: Boolean) {
         experimentalToken.value = value
         prefs.edit().putBoolean("experimentalToken", value).apply()

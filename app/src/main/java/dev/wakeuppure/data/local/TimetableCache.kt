@@ -39,23 +39,20 @@ class PreparedTimetable internal constructor(
     fun week(week: Int): TimetableWeekLayout = cached(week)
         ?: remember(TimetableLayout.calculate(data, week)).also(save)
 
-    /** Read ahead of pager composition; a fast gesture still has the synchronous calculation fallback. */
+    /** Used by the pager: a cache miss must never calculate a dense week during a UI frame. */
+    suspend fun prepareWeek(week: Int): TimetableWeekLayout = withContext(Dispatchers.Default) {
+        cached(week) ?: (load(week)?.let(::remember)
+            ?: remember(TimetableLayout.calculate(data, week)).also(save))
+    }
+
+    /** Read ahead of pager composition, with the requested week first. */
     suspend fun prepareAround(week: Int, radius: Int = 1) = withContext(Dispatchers.Default) {
         val current = week.coerceIn(1, data.schedule.maxWeeks)
-        val calculated = mutableListOf<TimetableWeekLayout>()
-        try {
-            for (target in maxOf(1, current - radius)..minOf(data.schedule.maxWeeks, current + radius)) {
-                ensureActive()
-                if (cached(target) != null) continue
-                val saved = load(target)
-                if (saved != null) remember(saved) else {
-                    calculated += remember(TimetableLayout.calculate(data, target))
-                }
-            }
-        } finally {
-            // Save finished work even if a newer date/page cancels this prefetch. Source keys keep
-            // old and new schedules separate. Finish reads before queueing writes and their fsync.
-            calculated.forEach(save)
+        // Prioritise the requested page instead of blocking it behind the oldest neighbour.
+        for (target in (maxOf(1, current - radius)..minOf(data.schedule.maxWeeks, current + radius))
+            .sortedBy { kotlin.math.abs(it - current) }) {
+            ensureActive()
+            if (cached(target) == null) prepareWeek(target)
         }
     }
 }

@@ -6,6 +6,16 @@ import android.content.Intent
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.SystemUpdate
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -75,8 +85,12 @@ private fun openInstallSettings(context: Context) {
     }
 }
 
+private data class CheckStatus(val kind: String, val title: String, val detail: String)
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun AppUpdateSettings(state: AppUpdateState, onAutomaticChanged: (Boolean) -> Unit, onCheck: () -> Unit) {
+fun AppUpdateSettings(state: AppUpdateState, onAutomaticChanged: (Boolean) -> Unit, onCheck: () -> Unit,
+    onShowUpdate: () -> Unit = {}) {
     SettingRow("版本 ${BuildConfig.VERSION_NAME}", chevron = false, trailing = {
         TextButton(onClick = onCheck, enabled = !state.checking) {
             if (state.checking) {
@@ -87,7 +101,43 @@ fun AppUpdateSettings(state: AppUpdateState, onAutomaticChanged: (Boolean) -> Un
         }
     })
     SwitchRow("自动检查更新", state.autoCheckEnabled, onAutomaticChanged)
-    state.message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodyMedium) }
+    val release = state.availableRelease ?: state.release
+    val status = when {
+        state.checking -> CheckStatus("checking", "正在检查更新", "正在连接 GitHub")
+        state.message?.contains("失败") == true -> CheckStatus("error", "检查未完成", state.message)
+        release != null -> CheckStatus("available", "发现新版本 ${release.version}", "查看更新说明和安装选项")
+        state.message != null -> CheckStatus(if (state.message == "已是最新版本") "current" else "info", state.message, "当前版本 ${BuildConfig.VERSION_NAME}")
+        else -> null
+    }
+    val effects = MaterialTheme.motionScheme.fastEffectsSpec<Float>()
+    val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<androidx.compose.ui.unit.IntSize>()
+    Box(Modifier.fillMaxWidth().animateContentSize(spatial)) {
+        AnimatedContent(status, transitionSpec = { fadeIn(effects) togetherWith fadeOut(effects) }, label = "updateCheckStatus") { result ->
+            if (result != null) Surface(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite },
+                shape = MaterialTheme.shapes.large,
+                color = if (result.kind == "error") MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = if (result.kind == "error") MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSecondaryContainer) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (result.kind == "checking") LoadingIndicator(Modifier.size(24.dp))
+                        else Icon(when (result.kind) {
+                            "error" -> Icons.Outlined.ErrorOutline
+                            "available" -> Icons.Outlined.SystemUpdate
+                            "current" -> Icons.Outlined.CheckCircle
+                            else -> Icons.Outlined.Info
+                        }, null, Modifier.size(24.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(result.title, style = MaterialTheme.typography.titleSmall)
+                            Text(result.detail, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                    if (result.kind == "available") FilledTonalButton(onClick = onShowUpdate,
+                        shapes = ButtonDefaults.shapes(), modifier = Modifier.align(Alignment.End)) { Text("查看更新") }
+                }
+            }
+        }
+    }
 }
 
 @Composable

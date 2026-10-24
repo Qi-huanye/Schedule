@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,6 +7,29 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
 }
+
+// Keep the in-app offline legal page complete when runtime dependencies change.
+val verifyOpenSourceCatalog = tasks.register("verifyOpenSourceCatalog") {
+    val catalogFile = layout.projectDirectory.file("src/main/assets/legal/catalog.json")
+    inputs.file(catalogFile)
+    doLast {
+        val catalog = JsonSlurper().parse(catalogFile.asFile) as Map<*, *>
+        val components = catalog["components"] as List<*>
+        val declared = components.map { (it as Map<*, *>)["id"].toString() }.toSet()
+        val resolved = listOf("debugRuntimeClasspath", "releaseRuntimeClasspath").flatMap { name ->
+            configurations.getByName(name).resolvedConfiguration.resolvedArtifacts
+                .map { "${it.moduleVersion.id.group}:${it.moduleVersion.id.name}:${it.moduleVersion.id.version}" }
+        }.toSet()
+        check(declared.containsAll(resolved)) { "Open-source catalog is missing: ${resolved - declared}. Update legal/catalog.json before shipping." }
+        val texts = catalog["texts"] as Map<*, *>
+        components.forEach { entry ->
+            ((entry as Map<*, *>)["licenses"] as List<*>).forEach { license ->
+                check(!texts[license].toString().isBlank() && texts[license] != null) { "License text missing: $license" }
+            }
+        }
+    }
+}
+tasks.named("preBuild") { dependsOn(verifyOpenSourceCatalog) }
 android {
     namespace = "dev.wakeuppure"
     compileSdk = 36

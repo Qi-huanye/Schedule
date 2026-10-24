@@ -81,14 +81,14 @@ fun CourseDetailSheet(item: CourseWithPeriods, slots: List<TimeSlot>, onDismiss:
                 val start = slots.find { it.section == p.startSection }?.startTime
                 val end = slots.find { it.section == p.endSection }?.endTime
                 Spacer(Modifier.height(6.dp))
-                Text("周${WEEKDAYS[p.dayOfWeek - 1]} ${p.startSection}–${p.endSection} 节" + if (start != null && end != null) " · $start–$end" else "",
+                Text("周${WEEKDAYS[p.dayOfWeek - 1]} ${p.startSection}–${p.endSection} 节" + if (start != null && end != null) "，$start–$end" else "",
                     style = MaterialTheme.typography.bodyLarge)
                 val room = p.classroom.ifBlank { item.course.classroom }
-                Text(listOf(periodWeeks(p.copy(classroom = ""), ""), room).filter { it.isNotBlank() }.joinToString(" · "),
+                Text(listOf(periodWeeks(p.copy(classroom = ""), ""), room).filter { it.isNotBlank() }.joinToString("\n"),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             val extra = listOf(item.course.teacher, item.course.note).filter { it.isNotBlank() }
-            if (extra.isNotEmpty()) Text(extra.joinToString(" · "), Modifier.padding(top = 8.dp),
+            if (extra.isNotEmpty()) Text(extra.joinToString("\n"), Modifier.padding(top = 8.dp),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

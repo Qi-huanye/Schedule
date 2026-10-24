@@ -12,6 +12,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Today
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -39,6 +43,8 @@ import dev.wakeuppure.ui.components.*
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 
+private data class Destination(val route: String, val label: String, val active: ImageVector, val inactive: ImageVector)
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = null,
@@ -56,6 +62,7 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
     val all = state.schedules.schedules
     val data = all.firstOrNull { it.schedule.current } ?: all.firstOrNull()
     val appearance = state.appearance
+    val themeSettings by vm.themeSettings.collectAsStateWithLifecycle()
     val error by vm.error.collectAsState()
     val busy by vm.busy.collectAsState()
     val backgroundState = state.background
@@ -73,10 +80,12 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
     val route = entry?.destination?.route ?: "timetable"
     val createSchedule = { creating = true }
     val openTransfer = { nav.navigate("transfer") }
-    PureTheme(appearance, backgroundState) {
+    PureTheme(appearance, backgroundState, themeSettings) {
         val wide = LocalWindowInfo.current.containerSize.width >= with(LocalDensity.current) { 600.dp.roundToPx() }
-        val destinations = listOf(Triple("timetable", "课表", Icons.Default.CalendarMonth), Triple("today", "今日", Icons.Default.Today), Triple("mine", "我的", Icons.Default.PersonOutline))
-        val topLevel = route in destinations.map { it.first }
+        val destinations = listOf(Destination("timetable", "课表", Icons.Default.CalendarMonth, Icons.Outlined.CalendarMonth),
+            Destination("today", "今日", Icons.Default.Today, Icons.Outlined.Today),
+            Destination("mine", "我的", Icons.Default.Person, Icons.Outlined.Person))
+        val topLevel = route in destinations.map { it.route }
         val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
         val effects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
         fun navigateTo(id: String) {
@@ -91,13 +100,14 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
             color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) {
             Scaffold(containerColor = Color.Transparent, bottomBar = {
                 if (topLevel && !wide) NavigationBar(containerColor = backgroundChromeColor(MaterialTheme.colorScheme.surfaceContainer)) {
-                    destinations.forEach { (id, label, icon) ->
-                        NavigationBarItem(selected = route == id, onClick = { navigateTo(id) }, icon = { Icon(icon, null) }, label = { Text(label) })
+                    destinations.forEach { (id, label, active, inactive) ->
+                        NavigationBarItem(selected = route == id, onClick = { navigateTo(id) }, icon = { DestinationIcon(route == id, active, inactive) }, label = { Text(label) })
                     }
                 }
             }, floatingActionButton = {
                 if (route == "timetable" && data != null) ExtendedFloatingActionButton(
                     onClick = { editCourse = null; nav.navigate("course") },
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
                     modifier = Modifier.semantics { contentDescription = "添加课程" },
                     icon = { Icon(Icons.Default.Add, null) }, text = { Text("添加课程") })
             }) { padding ->
@@ -106,9 +116,9 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
                     if (wide && topLevel) NavigationRail(containerColor = backgroundChromeColor(MaterialTheme.colorScheme.surfaceContainer),
                         header = { ScheduleMark(Modifier.padding(vertical = 16.dp).size(40.dp)) }, modifier = Modifier.fillMaxHeight()) {
                         Spacer(Modifier.height(24.dp))
-                        destinations.forEach { (id, label, icon) ->
+                        destinations.forEach { (id, label, active, inactive) ->
                             NavigationRailItem(selected = route == id, onClick = { navigateTo(id) },
-                                icon = { Icon(icon, null) }, label = { Text(label) }, modifier = Modifier.padding(vertical = 8.dp))
+                                icon = { DestinationIcon(route == id, active, inactive) }, label = { Text(label) }, modifier = Modifier.padding(vertical = 8.dp))
                         }
                     }
                     NavHost(nav, startDestination = "timetable", modifier = Modifier.weight(1f),
@@ -127,7 +137,7 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
                         composable("mine") {
                             val settingsUpdates = updates ?: viewModel<AppUpdateViewModel>(viewModelStoreOwner = owner)
                             MineScreen(vm, data, appearance, backgrounds, settingsUpdates, { imagePicker.launch(arrayOf("image/*")) },
-                                { nav.navigate("times") }, openTransfer, createSchedule)
+                                { nav.navigate("times") }, openTransfer, createSchedule, { nav.navigate("about") })
                         }
                         composable("course") {
                             data?.let { CourseEditor(it, editCourse, busy, { nav.popBackStack() }, { item -> vm.deleteCourse(item.course.id); nav.popBackStack() }) { c, p, slots ->
@@ -135,6 +145,9 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
                         }
                         composable("times") { data?.let { TimesScreen(it, busy, { nav.popBackStack() }) { s, slots -> vm.saveSchedule(s, slots) { nav.popBackStack() } } } }
                         composable("transfer") { TransferScreen(vm, all, data) { nav.popBackStack() } }
+                        composable("about") { AboutScreen({ nav.popBackStack() }, { nav.navigate("licenses") }, { nav.navigate("privacy") }) }
+                        composable("licenses") { LicensesScreen { nav.popBackStack() } }
+                        composable("privacy") { PrivacyScreen { nav.popBackStack() } }
                     }
                 }
             }

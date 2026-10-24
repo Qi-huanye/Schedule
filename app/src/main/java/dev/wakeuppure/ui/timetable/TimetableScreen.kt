@@ -5,6 +5,9 @@ package dev.wakeuppure.ui.timetable
 import androidx.compose.foundation.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.interaction.DragInteraction
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
@@ -46,13 +49,12 @@ fun TimetableScreen(timetable: PreparedTimetable, all: List<ScheduleData>, now: 
     val pager = key(data.schedule.id, current, data.schedule.maxWeeks) {
         rememberPagerState(initialPage = current.coerceIn(1, data.schedule.maxWeeks) - 1, pageCount = { data.schedule.maxWeeks })
     }
-    val week = pager.currentPage + 1
+    val week by remember(pager) { derivedStateOf { pager.settledPage + 1 } }
     val scope = rememberCoroutineScope()
     var weekJump by remember(timetable, pager) { mutableStateOf<Job?>(null) }
     fun showWeek(target: Int) {
         weekJump?.cancel()
         weekJump = scope.launch {
-            timetable.prepareAround(target)
             pager.animateScrollToPage(target - 1)
         }
     }
@@ -103,14 +105,24 @@ fun TimetableScreen(timetable: PreparedTimetable, all: List<ScheduleData>, now: 
         }
         if (current < 1 || current > data.schedule.maxWeeks) Text(if (current < 1) "尚未开学" else "本学期已结束",
             Modifier.align(Alignment.CenterHorizontally).background(backgroundPanelColor()).padding(bottom = 8.dp), color = MaterialTheme.colorScheme.secondary)
-        HorizontalPager(state = pager, modifier = Modifier.fillMaxWidth().weight(1f), beyondViewportPageCount = 1) { page ->
-            val layout = remember(timetable, page) { timetable.week(page + 1) }
-            TimetableWeek(data, layout, now, onDetail, onEdit)
-        }
+        WeekPager(timetable, pager, now, onDetail, onEdit, Modifier.fillMaxWidth().weight(1f))
     }
     if (panel) WeekSchedulePanel(data, all, week, current, onDismiss = { panel = false },
         onWeek = { target -> panel = false; showWeek(target) },
         onSelect = { panel = false; onSelect(it) }, onNewSchedule = { panel = false; onNewSchedule() }, onImport = { panel = false; onImport() })
+}
+
+@Composable
+internal fun WeekPager(timetable: PreparedTimetable, pager: PagerState, now: LocalDateTime,
+    onDetail: (CourseWithPeriods) -> Unit, onEdit: (CourseWithPeriods) -> Unit, modifier: Modifier = Modifier) {
+    HorizontalPager(state = pager, modifier = modifier.testTag("week_pager"), beyondViewportPageCount = 1,
+        key = { it }, flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.35f)) { page ->
+        val layout by key(timetable, page) {
+            produceState(initialValue = timetable.cached(page + 1)) { value = timetable.prepareWeek(page + 1) }
+        }
+        layout?.let { TimetableWeek(timetable.data, it, now, onDetail, onEdit) }
+            ?: Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -120,11 +132,10 @@ private fun TimetableWeek(data: ScheduleData, layout: TimetableWeekLayout, now: 
     val today = now.toLocalDate().toEpochDay()
     val second = now.toLocalTime().toSecondOfDay()
     val fontScale = LocalDensity.current.fontScale
-    val horizontalScroll = rememberScrollState()
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Keep dense timetable columns readable on narrow windows and with large text.
-        val contentWidth = maxOf(maxWidth, 42.dp + (48 * fontScale.coerceAtLeast(1f)).dp * layout.days.size)
-        Row(Modifier.fillMaxSize().horizontalScroll(horizontalScroll)) {
+        // Horizontal gestures belong exclusively to the week pager, at every font size.
+        val contentWidth = maxWidth
+        Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(contentWidth).fillMaxHeight()) {
                 Row(Modifier.fillMaxWidth().background(backgroundChromeColor()).padding(end = 6.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.width(42.dp), horizontalAlignment = Alignment.CenterHorizontally) {

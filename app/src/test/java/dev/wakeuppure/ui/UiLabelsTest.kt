@@ -46,7 +46,7 @@ class UiLabelsTest {
 
     @Test fun periodSummaryShowsOnlyDifferences() {
         assertEquals("第 3–18 周", periodWeeks(CoursePeriod(startWeek = 3, endWeek = 18, classroom = "A101"), "A101"))
-        assertEquals("第 3–17 周 · 单周 · 实验楼 101",
+        assertEquals("第 3–17 周，单周，实验楼 101",
             periodWeeks(CoursePeriod(startWeek = 3, endWeek = 17, weekType = WeekType.ODD, classroom = "实验楼 101"), "A101"))
     }
 }

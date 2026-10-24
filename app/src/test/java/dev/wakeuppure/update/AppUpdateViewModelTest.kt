@@ -202,4 +202,15 @@ class AppUpdateViewModelTest {
         vm.checkForUpdates(); advanceUntilIdle()
         assertEquals(2, calls)
     }
+
+    @Test fun dismissedReleaseCanBeOpenedAgainFromSettings() = runTest(dispatcher) {
+        val vm = model()
+        vm.checkForUpdates(manual = true); advanceUntilIdle()
+        vm.dismissUpdate()
+        assertNull(vm.state.value.release)
+        assertEquals(release, vm.state.value.availableRelease)
+        vm.showAvailableUpdate()
+        assertEquals(release, vm.state.value.release)
+        assertEquals(1, calls)
+    }
 }

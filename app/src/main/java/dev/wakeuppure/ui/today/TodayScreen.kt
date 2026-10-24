@@ -33,7 +33,7 @@ fun TodayScreen(data: ScheduleData, now: LocalDateTime, onCourse: (CourseWithPer
     fun open(o: Occurrence) { data.courses.firstOrNull { it.course.id == o.course.id }?.let(onCourse) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
-            PageHeading("今日", "${date.monthValue}月${date.dayOfMonth}日 · 周${WEEKDAYS[date.dayOfWeek.value - 1]} · " + when {
+            PageHeading("今日", "${date.monthValue}月${date.dayOfMonth}日，周${WEEKDAYS[date.dayOfWeek.value - 1]}，" + when {
                 week < 1 -> "尚未开学"
                 week > data.schedule.maxWeeks -> "本学期已结束"
                 else -> "第 $week 周"
@@ -50,8 +50,8 @@ fun TodayScreen(data: ScheduleData, now: LocalDateTime, onCourse: (CourseWithPer
                         Icon(Icons.AutoMirrored.Filled.ArrowForward, "查看课程", Modifier.size(24.dp))
                     }
                     Text(focus.course.name, style = MaterialTheme.typography.headlineLarge, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                    Text(if (active != null) "${focus.start.toLocalTime()} – ${focus.end.toLocalTime()} · 进行中"
-                        else if (focus.date == date) "${focus.start.toLocalTime()} · ${relativeStart(now, focus.start)}"
+                    Text(if (active != null) "${focus.start.toLocalTime()} – ${focus.end.toLocalTime()}，进行中"
+                        else if (focus.date == date) "${focus.start.toLocalTime()}，${relativeStart(now, focus.start)}"
                         else dayLabel(date, focus.start), style = MaterialTheme.typography.titleMedium)
                     if (focus.classroom.isNotBlank()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Place, null, Modifier.size(20.dp))
@@ -114,7 +114,7 @@ private fun OccurrenceCard(o: Occurrence, index: Int, chip: String?, past: Boole
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("${o.start.toLocalTime()} – ${o.end.toLocalTime()}", style = MaterialTheme.typography.labelLarge)
                 Text(o.course.name, style = MaterialTheme.typography.titleLarge)
-                val detail = listOf(o.classroom, o.course.teacher).filter { it.isNotBlank() }.joinToString(" · ")
+                val detail = listOf(o.classroom, o.course.teacher).filter { it.isNotBlank() }.joinToString("\n")
                 if (detail.isNotEmpty()) Text(detail, style = MaterialTheme.typography.bodyMedium)
                 if (chip != null) Text(chip, style = MaterialTheme.typography.labelLarge)
             }

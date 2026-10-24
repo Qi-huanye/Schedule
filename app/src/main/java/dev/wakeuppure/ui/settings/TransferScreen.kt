@@ -92,7 +92,7 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
                     Icon(Icons.Default.FolderOpen, null)
                     Column {
                         Text("选择文件", style = MaterialTheme.typography.titleMedium)
-                        Text("ICS · JSON · 备份", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("ICS、JSON 和备份", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -145,7 +145,7 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
     pending?.let { schedules ->
         AlertDialog(onDismissRequest = vm::clearImport, title = { Text("导入课表") }, text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                schedules.forEach { Text("${it.schedule.name} · ${it.courses.size} 门课程") }
+                schedules.forEach { Text("${it.schedule.name}，${it.courses.size} 门课程") }
             }
         }, confirmButton = { TextButton(onClick = { vm.acceptImport { toast("课表已导入") } }, enabled = !busy) { Text("导入") } },
             dismissButton = { TextButton(onClick = vm::clearImport, enabled = !busy) { Text("取消") } })
