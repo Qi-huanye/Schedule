@@ -8,6 +8,7 @@ import dev.wakeuppure.data.local.ScheduleCache
 import dev.wakeuppure.data.local.PreparedTimetable
 import dev.wakeuppure.data.local.TimetableCache
 import dev.wakeuppure.data.repository.ScheduleRepository
+import dev.wakeuppure.widget.WidgetUpdater
 import dev.wakeuppure.data.repository.ThemePreferences
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.data.wakeup.json.WakeUpJsonImporter
@@ -159,6 +160,16 @@ class PureViewModel(
         repository.saveCourse(course, periods, slots); withContext(Dispatchers.Main) { done() }
     }
     fun deleteCourse(id: Long) = action { repository.deleteCourse(id) }
+    fun saveTodo(todo: Todo, done: () -> Unit = {}) = action {
+        repository.saveTodo(todo)
+        WidgetUpdater.refresh(getApplication())
+        withContext(Dispatchers.Main) { done() }
+    }
+    fun toggleTodo(todo: Todo) = action {
+        repository.saveTodo(todo.copy(completed = !todo.completed))
+        WidgetUpdater.refresh(getApplication())
+    }
+    fun deleteTodo(id: Long) = action { repository.deleteTodo(id); WidgetUpdater.refresh(getApplication()) }
     fun select(id: Long) = action { repository.selectSchedule(id) }
     fun deleteSchedule(id: Long) = action { repository.deleteSchedule(id) }
     fun clearImport() { imported.value = null; pendingAppearance = null }

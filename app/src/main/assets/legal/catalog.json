@@ -127,12 +127,12 @@
       "kind": "maven"
     },
     {
-      "id": "androidx.compose.material3:material3-android:1.5.0-alpha01",
+      "id": "androidx.compose.material3:material3-android:1.5.0-alpha10",
       "name": "Compose Material3 Components",
       "licenses": [
         "Apache-2.0"
       ],
-      "projectUrl": "https://developer.android.com/jetpack/androidx/releases/compose-material3#1.5.0-alpha01",
+      "projectUrl": "https://developer.android.com/jetpack/androidx/releases/compose-material3#1.5.0-alpha10",
       "kind": "maven"
     },
     {

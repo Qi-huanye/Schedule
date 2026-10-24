@@ -17,7 +17,7 @@ import kotlinx.coroutines.withTimeout
 
 @RunWith(AndroidJUnit4::class)
 class DeviceWorkflowTest {
-    @Test fun bothWidgetsBindAndRender() = runBlocking {
+    @Test fun allThreeWidgetsBindAndRender() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val app = instrumentation.targetContext.applicationContext as PureApp
         fun shell(command: String) {
@@ -33,7 +33,7 @@ class DeviceWorkflowTest {
                 host = android.appwidget.AppWidgetHost(app, 701)
                 hostCreated = true
                 val manager = android.appwidget.AppWidgetManager.getInstance(app)
-                listOf(dev.wakeuppure.widget.TodayWidget::class.java, dev.wakeuppure.widget.NextWidget::class.java).forEach { type ->
+                listOf(dev.wakeuppure.widget.TodayWidget::class.java, dev.wakeuppure.widget.NextWidget::class.java, dev.wakeuppure.widget.TodoWidget::class.java).forEach { type ->
                     val id = host.allocateAppWidgetId()
                     assertTrue(manager.bindAppWidgetIdIfAllowed(id, android.content.ComponentName(app, type)))
                     views += host.createView(app, id, manager.getAppWidgetInfo(id))
@@ -45,14 +45,15 @@ class DeviceWorkflowTest {
                 var ready = false
                 while (!ready) {
                     instrumentation.runOnMainSync {
-                        ready = views.all { !it.findViewById<android.widget.TextView>(R.id.widget_body)?.text.isNullOrBlank() }
+                        ready = views.take(2).all { it.findViewById<android.view.View>(R.id.widget_root) != null } && views[2].findViewById<android.view.View>(R.id.todo_widget_root) != null
                     }
                     if (!ready) delay(100)
                 }
             }
             instrumentation.runOnMainSync {
-                assertTrue(views[0].findViewById<android.widget.TextView>(R.id.widget_title).text.startsWith("今日课程"))
-                assertEquals("下一节课", views[1].findViewById<android.widget.TextView>(R.id.widget_title).text.toString())
+                assertTrue(views[0].findViewById<android.widget.TextView>(R.id.widget_title).text.toString() in listOf("正在上课", "下一节课"))
+                assertEquals("今日课表", views[1].findViewById<android.widget.TextView>(R.id.widget_title).text.toString())
+                assertFalse(views[2].findViewById<android.widget.TextView>(R.id.todo_widget_task).text.isNullOrBlank())
             }
         } finally {
             instrumentation.runOnMainSync { if (hostCreated) { host.stopListening(); host.deleteHost() } }

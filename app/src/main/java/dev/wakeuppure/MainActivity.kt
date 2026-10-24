@@ -54,7 +54,9 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             dev.wakeuppure.ui.PureRoot(vm = scheduleModel, backgrounds = backgroundModel,
-                onContentReady = { contentReady = true })
+                onContentReady = { contentReady = true }, openToday = intent.getBooleanExtra("open_today", false),
+                initialTodoId = intent.getLongExtra("todo_id", 0).takeIf { it > 0 },
+                initialScheduleId = intent.getLongExtra("schedule_id", 0).takeIf { it > 0 })
         }
     }
 

@@ -19,6 +19,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.filled.Check
+import dev.wakeuppure.ui.todo.TodoListSheet
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -42,7 +45,7 @@ import java.time.*
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TimetableScreen(timetable: PreparedTimetable, all: List<ScheduleData>, now: LocalDateTime, onDetail: (CourseWithPeriods) -> Unit,
-    onEdit: (CourseWithPeriods) -> Unit, onSelect: (Long) -> Unit, onNewSchedule: () -> Unit, onImport: () -> Unit,
+    onEdit: (CourseWithPeriods) -> Unit, onTodo: (Todo) -> Unit, onSelect: (Long) -> Unit, onNewSchedule: () -> Unit, onImport: () -> Unit,
     prefetchEnabled: Boolean = true) {
     val data = timetable.data
     val current = WeekCalculator.week(data.schedule.semesterStartDate, now.toLocalDate())
@@ -72,6 +75,8 @@ fun TimetableScreen(timetable: PreparedTimetable, all: List<ScheduleData>, now: 
         }
     }
     var panel by remember { mutableStateOf(false) }
+    var showOverdue by remember { mutableStateOf(false) }
+    val overdue = data.todos.filter { !it.completed && it.dueAt < now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() }.sortedBy { it.dueAt }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxWidth().background(backgroundChromeColor())) {
             Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -83,6 +88,7 @@ fun TimetableScreen(timetable: PreparedTimetable, all: List<ScheduleData>, now: 
                         Icon(Icons.Default.ExpandMore, "选择周次或课表", Modifier.padding(start = 4.dp).size(28.dp))
                     }
                 }
+                if (overdue.isNotEmpty()) TextButton(onClick = { showOverdue = true }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("逾期 ${overdue.size}") }
                 if (week != current) Surface(shape = MaterialTheme.shapes.small,
                     color = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer) {
                     Text("非本周", Modifier.padding(horizontal = 12.dp, vertical = 8.dp), style = MaterialTheme.typography.labelLarge)
@@ -105,8 +111,9 @@ fun TimetableScreen(timetable: PreparedTimetable, all: List<ScheduleData>, now: 
         }
         if (current < 1 || current > data.schedule.maxWeeks) Text(if (current < 1) "尚未开学" else "本学期已结束",
             Modifier.align(Alignment.CenterHorizontally).background(backgroundPanelColor()).padding(bottom = 8.dp), color = MaterialTheme.colorScheme.secondary)
-        WeekPager(timetable, pager, now, onDetail, onEdit, Modifier.fillMaxWidth().weight(1f))
+        WeekPager(timetable, pager, now, onDetail, onEdit, Modifier.fillMaxWidth().weight(1f), onTodo)
     }
+    if (showOverdue) TodoListSheet("逾期待办", overdue, { showOverdue = false }, onTodo)
     if (panel) WeekSchedulePanel(data, all, week, current, onDismiss = { panel = false },
         onWeek = { target -> panel = false; showWeek(target) },
         onSelect = { panel = false; onSelect(it) }, onNewSchedule = { panel = false; onNewSchedule() }, onImport = { panel = false; onImport() })
@@ -114,13 +121,13 @@ fun TimetableScreen(timetable: PreparedTimetable, all: List<ScheduleData>, now: 
 
 @Composable
 internal fun WeekPager(timetable: PreparedTimetable, pager: PagerState, now: LocalDateTime,
-    onDetail: (CourseWithPeriods) -> Unit, onEdit: (CourseWithPeriods) -> Unit, modifier: Modifier = Modifier) {
+    onDetail: (CourseWithPeriods) -> Unit, onEdit: (CourseWithPeriods) -> Unit, modifier: Modifier = Modifier, onTodo: (Todo) -> Unit = {}) {
     HorizontalPager(state = pager, modifier = modifier.testTag("week_pager"), beyondViewportPageCount = 1,
         key = { it }, flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.35f)) { page ->
         val layout by key(timetable, page) {
             produceState(initialValue = timetable.cached(page + 1)) { value = timetable.prepareWeek(page + 1) }
         }
-        layout?.let { TimetableWeek(timetable.data, it, now, onDetail, onEdit) }
+        layout?.let { TimetableWeek(timetable.data, it, now, onDetail, onEdit, onTodo) }
             ?: Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
     }
 }
@@ -128,10 +135,12 @@ internal fun WeekPager(timetable: PreparedTimetable, pager: PagerState, now: Loc
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TimetableWeek(data: ScheduleData, layout: TimetableWeekLayout, now: LocalDateTime,
-    onDetail: (CourseWithPeriods) -> Unit, onEdit: (CourseWithPeriods) -> Unit) {
+    onDetail: (CourseWithPeriods) -> Unit, onEdit: (CourseWithPeriods) -> Unit, onTodo: (Todo) -> Unit) {
     val today = now.toLocalDate().toEpochDay()
     val second = now.toLocalTime().toSecondOfDay()
     val fontScale = LocalDensity.current.fontScale
+    var selectedGroup by remember { mutableStateOf<List<Todo>?>(null) }
+    selectedGroup?.let { todos -> TodoListSheet("待办", todos, { selectedGroup = null }, onTodo) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Horizontal gestures belong exclusively to the week pager, at every font size.
         val contentWidth = maxWidth
@@ -153,6 +162,7 @@ private fun TimetableWeek(data: ScheduleData, layout: TimetableWeekLayout, now: 
                                     fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isToday) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
                             }
+
                         }
                     }
                 }
@@ -202,6 +212,31 @@ private fun TimetableWeek(data: ScheduleData, layout: TimetableWeekLayout, now: 
                                         val room = period.classroom.ifBlank { course.course.classroom }
                                         val details = listOf(period.teacher.ifBlank { course.course.teacher }, room).filter { it.isNotBlank() }.joinToString(" @ ")
                                         if (details.isNotBlank()) Text(details, fontSize = 10.sp, lineHeight = 13.sp, color = ink.copy(alpha = .82f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+                            }
+                            TodoSchedule.markers(data.todos, day.epochDay, slots).forEach { marker ->
+                                val todo = marker.todos.first()
+                                val due = Instant.ofEpochMilli(todo.dueAt).atZone(ZoneId.systemDefault()).toLocalTime()
+                                val overdue = !todo.completed && todo.dueAt < now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                                val color = when {
+                                    marker.todos.all { it.completed } -> MaterialTheme.colorScheme.outline
+                                    overdue -> MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.tertiary
+                                }
+                                Box(Modifier.offset(y = height * marker.position).zIndex(3f).fillMaxWidth().height(48.dp)
+                                    .clip(RoundedCornerShape(8.dp)).clickable { if (marker.todos.size == 1) onTodo(todo) else selectedGroup = marker.todos }
+                                    .semantics { contentDescription = marker.todos.joinToString("，") { it.title } + "，${due} 截止" }) {
+                                    Column(Modifier.fillMaxWidth().padding(horizontal = 2.dp)) {
+                                        Surface(shape = RoundedCornerShape(6.dp), color = color, contentColor = MaterialTheme.colorScheme.surface) {
+                                            Text((if (todo.completed) "✓ " else "") + due.toString().take(5) + if (marker.todos.size > 1) " +${marker.todos.size - 1}" else "",
+                                                Modifier.padding(horizontal = 4.dp, vertical = 3.dp), fontSize = 9.sp, lineHeight = 12.sp, maxLines = 1)
+                                        }
+                                        Box(Modifier.fillMaxWidth().height(3.dp).background(color, RoundedCornerShape(2.dp)))
+                                        Surface(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f), shape = RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp)) {
+                                            Text(todo.title, Modifier.padding(horizontal = 3.dp, vertical = 2.dp), fontSize = 9.sp, lineHeight = 12.sp,
+                                                maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface)
+                                        }
                                     }
                                 }
                             }

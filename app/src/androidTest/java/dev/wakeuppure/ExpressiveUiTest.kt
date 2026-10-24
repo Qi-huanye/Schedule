@@ -55,7 +55,7 @@ class ExpressiveUiTest {
             CourseWithPeriods(Course(id = 1, name = "高等数学", classroom = "教学楼 201"), listOf(CoursePeriod(id = 1))),
             CourseWithPeriods(Course(id = 2, name = "大学英语"), listOf(CoursePeriod(id = 2, startSection = 3, endSection = 4))),
         ))
-        compose.setContent { PureTheme("light") { TodayScreen(data, LocalDateTime.of(2026, 10, 19, 8, 15)) {} } }
+        compose.setContent { PureTheme("light") { TodayScreen(data, LocalDateTime.of(2026, 10, 19, 8, 15), onCourse = {}) } }
         compose.onNodeWithText("正在上课").assertIsDisplayed()
         compose.onNodeWithText("下一节课").assertDoesNotExist()
         compose.onAllNodesWithText("高等数学").onFirst().assertIsDisplayed()

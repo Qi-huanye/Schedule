@@ -2,11 +2,16 @@
 
 package dev.wakeuppure.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.ToggleFloatingActionButtonDefaults.animateIcon
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
@@ -38,6 +43,7 @@ import dev.wakeuppure.ui.course.*
 import dev.wakeuppure.ui.settings.*
 import dev.wakeuppure.ui.timetable.TimetableScreen
 import dev.wakeuppure.ui.today.TodayScreen
+import dev.wakeuppure.ui.todo.TodoEditorSheet
 import dev.wakeuppure.ui.update.*
 import dev.wakeuppure.ui.components.*
 import kotlinx.coroutines.delay
@@ -48,7 +54,8 @@ private data class Destination(val route: String, val label: String, val active:
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = null,
-    backgrounds: BackgroundViewModel = viewModel(), onContentReady: () -> Unit = {}) {
+    backgrounds: BackgroundViewModel = viewModel(), onContentReady: () -> Unit = {}, openToday: Boolean = false,
+    initialTodoId: Long? = null, initialScheduleId: Long? = null) {
     val opening by remember(vm, backgrounds) { startupState(vm, backgrounds) }.collectAsStateWithLifecycle(initialValue = null)
     // Register before the readiness gate: Android can restore a pending image-picker result here.
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -75,9 +82,21 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
     var editCourse by remember { mutableStateOf<CourseWithPeriods?>(null) }
     var detail by remember { mutableStateOf<CourseWithPeriods?>(null) }
     var creating by remember { mutableStateOf(false) }
+    var addingTodo by remember { mutableStateOf(false) }
+    var editingTodo by remember { mutableStateOf<Todo?>(null) }
+    var fabMenuExpanded by remember { mutableStateOf(false) }
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
-    val route = entry?.destination?.route ?: "timetable"
+    val route = entry?.destination?.route ?: if (openToday) "today" else "timetable"
+    BackHandler(fabMenuExpanded) { fabMenuExpanded = false }
+    LaunchedEffect(route) { fabMenuExpanded = false }
+    var openedInitialTodo by remember { mutableStateOf(false) }
+    LaunchedEffect(initialTodoId, initialScheduleId, data?.schedule?.id) {
+        if (!openedInitialTodo && initialTodoId != null) {
+            if (initialScheduleId != null && data?.schedule?.id != initialScheduleId && all.any { it.schedule.id == initialScheduleId }) vm.select(initialScheduleId)
+            else { editingTodo = data?.todos?.find { it.id == initialTodoId }; openedInitialTodo = true }
+        }
+    }
     val createSchedule = { creating = true }
     val openTransfer = { nav.navigate("transfer") }
     PureTheme(appearance, backgroundState, themeSettings) {
@@ -105,14 +124,39 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
                     }
                 }
             }, floatingActionButton = {
-                if (route == "timetable" && data != null) ExtendedFloatingActionButton(
-                    onClick = { editCourse = null; nav.navigate("course") },
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-                    modifier = Modifier.semantics { contentDescription = "添加课程" },
-                    icon = { Icon(Icons.Default.Add, null) }, text = { Text("添加课程") })
+                if (route == "timetable" && data != null) {
+                    FloatingActionButtonMenu(
+                        expanded = fabMenuExpanded,
+                        button = {
+                            ToggleFloatingActionButton(
+                                checked = fabMenuExpanded,
+                                onCheckedChange = { fabMenuExpanded = it },
+                                modifier = Modifier.semantics {
+                                    contentDescription = if (fabMenuExpanded) "关闭添加菜单" else "添加"
+                                    stateDescription = if (fabMenuExpanded) "已展开" else "已收起"
+                                },
+                            ) {
+                                Icon(if (checkedProgress > 0.5f) Icons.Default.Close else Icons.Default.Add, null,
+                                    modifier = Modifier.animateIcon({ checkedProgress }))
+                            }
+                        },
+                    ) {
+                        FloatingActionButtonMenuItem(
+                            onClick = { fabMenuExpanded = false; editCourse = null; nav.navigate("course") },
+                            icon = { Icon(Icons.Default.Add, null) },
+                            text = { Text("添加课程") },
+                        )
+                        FloatingActionButtonMenuItem(
+                            onClick = { fabMenuExpanded = false; addingTodo = true },
+                            icon = { Icon(Icons.Default.Event, null) },
+                            text = { Text("添加待办") },
+                        )
+                    }
+                }
             }) { padding ->
                 // Inner screens with their own Scaffold must not apply the system bar insets a second time.
-                Row(Modifier.padding(padding).consumeWindowInsets(padding)) {
+                Box(Modifier.padding(padding).consumeWindowInsets(padding)) {
+                Row(Modifier.fillMaxSize()) {
                     if (wide && topLevel) NavigationRail(containerColor = backgroundChromeColor(MaterialTheme.colorScheme.surfaceContainer),
                         header = { ScheduleMark(Modifier.padding(vertical = 16.dp).size(40.dp)) }, modifier = Modifier.fillMaxHeight()) {
                         Spacer(Modifier.height(24.dp))
@@ -121,18 +165,18 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
                                 icon = { DestinationIcon(route == id, active, inactive) }, label = { Text(label) }, modifier = Modifier.padding(vertical = 8.dp))
                         }
                     }
-                    NavHost(nav, startDestination = "timetable", modifier = Modifier.weight(1f),
+                    NavHost(nav, startDestination = if (openToday) "today" else "timetable", modifier = Modifier.weight(1f),
                         enterTransition = { fadeIn(effects) + slideInHorizontally(spatial) { it / 12 } },
                         exitTransition = { fadeOut(effects) + slideOutHorizontally(spatial) { -it / 12 } },
                         popEnterTransition = { fadeIn(effects) + slideInHorizontally(spatial) { -it / 12 } },
                         popExitTransition = { fadeOut(effects) + slideOutHorizontally(spatial) { it / 12 } }) {
                         composable("timetable") {
                             if (data == null) EmptySchedule(createSchedule, openTransfer)
-                            else TimetableScreen(requireNotNull(state.schedules.timetable), all, now, { detail = it }, { editCourse = it; nav.navigate("course") }, vm::select, createSchedule, openTransfer,
+                            else TimetableScreen(requireNotNull(state.schedules.timetable), all, now, { detail = it }, { editCourse = it; nav.navigate("course") }, { editingTodo = it }, vm::select, createSchedule, openTransfer,
                                 prefetchEnabled = firstFrameDrawn)
                         }
                         composable("today") {
-                            if (data == null) EmptySchedule(createSchedule, openTransfer) else TodayScreen(data, now) { detail = it }
+                            if (data == null) EmptySchedule(createSchedule, openTransfer) else TodayScreen(data, now, { detail = it }, vm::toggleTodo, { editingTodo = it })
                         }
                         composable("mine") {
                             val settingsUpdates = updates ?: viewModel<AppUpdateViewModel>(viewModelStoreOwner = owner)
@@ -150,9 +194,21 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
                         composable("privacy") { PrivacyScreen { nav.popBackStack() } }
                     }
                 }
+                if (fabMenuExpanded) Box(Modifier.fillMaxSize().clickable(
+                    interactionSource = remember { MutableInteractionSource() }, indication = null,
+                    onClickLabel = "关闭添加菜单", onClick = { fabMenuExpanded = false }))
+                }
             }
             detail?.let { item -> CourseDetailSheet(item, data?.timeSlots.orEmpty(), { detail = null }) { editCourse = item; detail = null; nav.navigate("course") } }
             if (creating) NewScheduleSheet(busy, { creating = false }) { schedule -> vm.saveSchedule(schedule, defaultTimeSlots()) { creating = false } }
+            if ((addingTodo || editingTodo != null) && data != null) TodoEditorSheet(
+                scheduleId = data.schedule.id, courses = data.courses, now = now,
+                onDismiss = { addingTodo = false; editingTodo = null },
+                onSave = { todo -> vm.saveTodo(todo) { addingTodo = false; editingTodo = null } },
+                todo = editingTodo,
+                onDelete = editingTodo?.let { todo -> { vm.deleteTodo(todo.id); editingTodo = null } },
+                busy = busy,
+            )
             error?.let { AlertDialog(onDismissRequest = { vm.error.value = null }, title = { Text("操作未完成") }, text = { Text(it) }, confirmButton = { TextButton(onClick = { vm.error.value = null }) { Text("知道了") } }) }
             if (firstFrameDrawn) AppUpdateHost(updates ?: viewModel(viewModelStoreOwner = owner))
         }

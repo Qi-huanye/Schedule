@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -22,13 +23,15 @@ import java.time.*
 import java.time.temporal.ChronoUnit
 
 @Composable
-fun TodayScreen(data: ScheduleData, now: LocalDateTime, onCourse: (CourseWithPeriods) -> Unit) {
+fun TodayScreen(data: ScheduleData, now: LocalDateTime, onCourse: (CourseWithPeriods) -> Unit, onToggleTodo: (Todo) -> Unit = {}, onTodo: (Todo) -> Unit = {}) {
     val date = now.toLocalDate()
     val today = CourseFilter.onDate(data, date)
     val next = CourseFilter.next(data, now)
     val active = today.firstOrNull { !now.isBefore(it.start) && now.isBefore(it.end) }
     val focus = active ?: next
     val completed = today.count { !now.isBefore(it.end) }
+    val todos = TodoSchedule.agenda(data.todos, date)
+    val agenda = (today.map { Triple(it.start, it, null as Todo?) } + todos.map { todo -> Triple(Instant.ofEpochMilli(todo.dueAt).atZone(ZoneId.systemDefault()).toLocalDateTime(), null, todo) }).sortedBy { it.first }
     val week = WeekCalculator.week(data.schedule.semesterStartDate, date)
     fun open(o: Occurrence) { data.courses.firstOrNull { it.course.id == o.course.id }?.let(onCourse) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -71,11 +74,11 @@ fun TodayScreen(data: ScheduleData, now: LocalDateTime, onCourse: (CourseWithPer
         item {
             Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("今日安排", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                Text(if (today.isEmpty()) "自由安排" else "$completed / ${today.size} 已结束",
+                Text(if (today.isEmpty() && todos.isEmpty()) "自由安排" else listOfNotNull("${completed} / ${today.size} 已结束".takeIf { today.isNotEmpty() }, "${todos.count { it.completed }} / ${todos.size} 待办已完成".takeIf { todos.isNotEmpty() }).joinToString("，"),
                     style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (today.isEmpty()) item {
+        if (today.isEmpty() && todos.isEmpty()) item {
             Surface(Modifier.padding(horizontal = 20.dp).fillMaxWidth(), shape = MaterialTheme.shapes.large,
                 color = backgroundPanelColor(MaterialTheme.colorScheme.surfaceContainerLow)) {
                 Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -84,15 +87,40 @@ fun TodayScreen(data: ScheduleData, now: LocalDateTime, onCourse: (CourseWithPer
                 }
             }
         }
-        itemsIndexed(today, key = { _, o -> o.period.id }) { index, o ->
-            val past = !now.isBefore(o.end)
-            val chip = when {
-                past -> "已结束"
-                !now.isBefore(o.start) -> "进行中"
-                o == next -> relativeStart(now, o.start)
-                else -> null
+        itemsIndexed(agenda, key = { _, row -> row.third?.let { "todo-${it.id}" } ?: "course-${row.second!!.period.id}" }) { index, row ->
+            val occurrence = row.second
+            val todo = row.third
+            if (occurrence != null) {
+                val past = !now.isBefore(occurrence.end)
+                val chip = when {
+                    past -> "已结束"
+                    !now.isBefore(occurrence.start) -> "进行中"
+                    occurrence == next -> relativeStart(now, occurrence.start)
+                    else -> null
+                }
+                OccurrenceCard(occurrence, index + 1, chip, past) { open(occurrence) }
+            } else if (todo != null) {
+                TodoCard(todo, now, data.courses.firstOrNull { it.course.id == todo.courseId }?.course?.name, onToggle = { onToggleTodo(todo) }, onClick = { onTodo(todo) })
             }
-            OccurrenceCard(o, index + 1, chip, past) { open(o) }
+        }
+    }
+}
+
+
+@Composable
+private fun TodoCard(todo: Todo, now: LocalDateTime, courseName: String?, onToggle: () -> Unit, onClick: () -> Unit) {
+    val due = Instant.ofEpochMilli(todo.dueAt).atZone(ZoneId.systemDefault()).toLocalDateTime()
+    val overdue = !todo.completed && due.isBefore(now)
+    Surface(onClick = onClick, shape = MaterialTheme.shapes.large, color = backgroundPanelColor(MaterialTheme.colorScheme.surfaceContainerLow),
+        modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()) {
+        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            IconButton(onClick = onToggle) { Icon(if (todo.completed) Icons.Default.Check else Icons.Default.RadioButtonUnchecked,
+                if (todo.completed) "已完成" else "标记完成", tint = if (todo.completed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(todo.title, style = MaterialTheme.typography.titleMedium, color = if (todo.completed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+                Text("截止 " + (if (due.toLocalDate() == now.toLocalDate()) due.toLocalTime().toString() else due.format(java.time.format.DateTimeFormatter.ofPattern("M月d日 HH:mm"))) + (courseName?.let { "，$it" } ?: "") + (if (overdue) "，已逾期" else ""),
+                    style = MaterialTheme.typography.bodyMedium, color = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

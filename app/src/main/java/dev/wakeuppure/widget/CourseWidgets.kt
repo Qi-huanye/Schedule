@@ -11,6 +11,7 @@ import dev.wakeuppure.MainActivity
 import dev.wakeuppure.PureApp
 import dev.wakeuppure.R
 import dev.wakeuppure.domain.usecase.CourseFilter
+import dev.wakeuppure.domain.usecase.TodoSchedule
 import dev.wakeuppure.domain.usecase.Occurrence
 import kotlinx.coroutines.*
 import java.time.LocalDateTime
@@ -27,6 +28,9 @@ open class TodayWidget : AppWidgetProvider() {
 /** Expanded widget: the remaining schedule for today. */
 class NextWidget : TodayWidget()
 
+/** Small home screen widget for deadlines due today. */
+class TodoWidget : TodayWidget()
+
 object WidgetUpdater {
     private const val MAX_EXPANDED_ROWS = 3
 
@@ -34,7 +38,8 @@ object WidgetUpdater {
         val manager = AppWidgetManager.getInstance(context)
         val compactIds = manager.getAppWidgetIds(ComponentName(context, TodayWidget::class.java))
         val expandedIds = manager.getAppWidgetIds(ComponentName(context, NextWidget::class.java))
-        if (compactIds.isEmpty() && expandedIds.isEmpty()) return
+        val todoIds = manager.getAppWidgetIds(ComponentName(context, TodoWidget::class.java))
+        if (compactIds.isEmpty() && expandedIds.isEmpty() && todoIds.isEmpty()) return
 
         val data = (context.applicationContext as PureApp).repository.snapshot()
             .let { all -> all.firstOrNull { it.schedule.current } ?: all.firstOrNull() }
@@ -47,6 +52,11 @@ object WidgetUpdater {
         }
         if (expandedIds.isNotEmpty()) expandedIds.forEach { id ->
             manager.updateAppWidget(id, expandedViews(context, data?.let { CourseFilter.onDate(it, now.toLocalDate()) } ?: emptyList(), now, open))
+        }
+        if (todoIds.isNotEmpty()) todoIds.forEach { id ->
+            manager.updateAppWidget(id, todoViews(context, TodoSchedule.agenda(data?.todos.orEmpty(), now.toLocalDate()),
+                PendingIntent.getActivity(context, 1, Intent(context, MainActivity::class.java).putExtra("open_today", true),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)))
         }
     }
 
@@ -85,6 +95,20 @@ object WidgetUpdater {
         for (index in rows.size until rowIds.size) views.setViewVisibility(rowIds[index], android.view.View.GONE)
         views.setViewVisibility(R.id.widget_empty, if (rows.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE)
         views.setTextViewText(R.id.widget_empty, if (today.isEmpty()) "今天没有课程" else "今天的课程已结束")
+        return views
+    }
+
+    private fun todoViews(context: Context, todos: List<dev.wakeuppure.domain.model.Todo>, open: PendingIntent): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.todo_widget)
+        val pending = todos.firstOrNull { !it.completed } ?: todos.firstOrNull()
+        val overdue = pending != null && !pending.completed && pending.dueAt < System.currentTimeMillis()
+        views.setTextViewText(R.id.todo_widget_title, if (pending == null) "今日待办" else if (pending.completed) "待办已完成" else if (overdue) "逾期待办" else "今日待办")
+        views.setTextViewText(R.id.todo_widget_task, pending?.title ?: "今天没有待办")
+        views.setTextViewText(R.id.todo_widget_meta, pending?.let {
+            val time = java.time.Instant.ofEpochMilli(it.dueAt).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern(if (overdue) "M/d HH:mm" else "HH:mm"))
+            (if (overdue) "$time 已逾期" else "$time 截止") + if (todos.count { item -> !item.completed } > 1) "，另有 ${todos.count { item -> !item.completed } - 1} 项" else ""
+        } ?: "轻松安排一天")
+        views.setOnClickPendingIntent(R.id.todo_widget_root, open)
         return views
     }
 

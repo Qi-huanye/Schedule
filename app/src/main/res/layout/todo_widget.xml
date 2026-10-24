@@ -1,0 +1,5 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:id="@+id/todo_widget_root" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="16dp" android:background="@drawable/widget_surface">
+    <TextView android:id="@+id/todo_widget_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="今日待办" android:textSize="13sp" android:textStyle="bold" android:textColor="@color/widget_on_surface_variant" />
+    <TextView android:id="@+id/todo_widget_task" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="今天没有待办" android:textSize="20sp" android:textStyle="bold" android:textColor="@color/widget_on_surface" android:maxLines="2" android:ellipsize="end" />
+    <TextView android:id="@+id/todo_widget_meta" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="轻松安排一天" android:textSize="12sp" android:textColor="@color/widget_on_surface_variant" android:maxLines="1" android:ellipsize="end" />
+</LinearLayout>
