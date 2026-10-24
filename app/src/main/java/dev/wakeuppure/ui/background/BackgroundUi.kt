@@ -129,6 +129,18 @@ fun backgroundScreenColor(): Color = backgroundPanelColor(MaterialTheme.colorSch
 
 /** Off-week cards recede: a pale neutral wash instead of a heavy gray block. */
 @Composable
+fun courseDisplayGradient(courseId: Long, storedColor: String): Brush {
+    val (base, _) = courseDisplayColors(courseId, storedColor)
+    val dark = base.luminance() < 0.45f
+    val end = if (dark) base.lighten(0.16f) else base.darken(0.08f)
+    return Brush.linearGradient(listOf(base, end), start = androidx.compose.ui.geometry.Offset.Zero,
+        end = androidx.compose.ui.geometry.Offset.Infinite)
+}
+
+private fun Color.lighten(amount: Float) = Color(red + (1f - red) * amount, green + (1f - green) * amount, blue + (1f - blue) * amount, alpha)
+private fun Color.darken(amount: Float) = Color(red * (1f - amount), green * (1f - amount), blue * (1f - amount), alpha)
+
+@Composable
 fun ghostCourseColor(): Color {
     val layers = LocalBackgroundLayers.current
     return if (layers != null) MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = layers.ghost)

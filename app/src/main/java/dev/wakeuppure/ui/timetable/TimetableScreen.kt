@@ -176,27 +176,32 @@ private fun TimetableWeek(data: ScheduleData, layout: TimetableWeekLayout, now: 
                                 val width = maxWidth / card.laneCount
                                 val (base, courseInk) = courseDisplayColors(course.course.id, course.course.color)
                                 val ink = if (ghost) MaterialTheme.colorScheme.onSurfaceVariant else courseInk
+                                val gradient = if (ghost) null else courseDisplayGradient(course.course.id, course.course.color)
                                 val active = !ghost && day.epochDay == today && card.startSecond != null && card.endSecond != null &&
                                     second >= card.startSecond && second < card.endSecond
                                 Box(Modifier.offset(x = width * card.lane, y = height * card.sectionIndex).width(width)
                                     .height(height * card.sectionSpan).padding(2.dp)
-                                    .background(if (ghost) ghostCourseColor() else base, RoundedCornerShape(12.dp))
+                                    .then(if (ghost) Modifier.background(ghostCourseColor(), RoundedCornerShape(16.dp))
+                                        else Modifier.background(requireNotNull(gradient), RoundedCornerShape(16.dp)))
                                     .then(when {
                                         active -> Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
                                         ghost && LocalBackgroundActive.current -> Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
                                         else -> Modifier
                                     })
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(RoundedCornerShape(16.dp))
                                     .semantics { contentDescription = "${course.course.name}，${period.startSection}至${period.endSection}节" +
                                         (if (ghost) "，非本周" else if (active) "，进行中" else "") }
-                                    .combinedClickable(onClick = { onDetail(course) }, onLongClick = { onEdit(course) }).padding(5.dp)) {
-                                    Column {
-                                        if (active && card.sectionSpan >= 2) Text("进行中", fontSize = 9.sp, lineHeight = 11.sp, color = ink, fontWeight = FontWeight.Bold)
-                                        if (ghost) Text("非本周", fontSize = 9.sp, lineHeight = 11.sp, color = ink)
-                                        Text(course.course.name, fontSize = 12.sp, lineHeight = 15.sp, color = ink,
-                                            fontWeight = FontWeight.Medium, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                                    .combinedClickable(onClick = { onDetail(course) }, onLongClick = { onEdit(course) }).padding(8.dp)) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            if (active && card.sectionSpan >= 2) Text("进行中", fontSize = 9.sp, lineHeight = 11.sp, color = ink, fontWeight = FontWeight.Bold)
+                                            if (ghost) Text("非本周", fontSize = 9.sp, lineHeight = 11.sp, color = ink)
+                                        }
+                                        Text(course.course.name, fontSize = 13.sp, lineHeight = 16.sp, color = ink,
+                                            fontWeight = FontWeight.Bold, maxLines = 4, overflow = TextOverflow.Ellipsis)
                                         val room = period.classroom.ifBlank { course.course.classroom }
-                                        if (room.isNotBlank()) Text(room, fontSize = 10.sp, lineHeight = 13.sp, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        val details = listOf(course.course.teacher, room).filter { it.isNotBlank() }.joinToString(" @ ")
+                                        if (details.isNotBlank()) Text(details, fontSize = 10.sp, lineHeight = 13.sp, color = ink.copy(alpha = .82f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
                             }
