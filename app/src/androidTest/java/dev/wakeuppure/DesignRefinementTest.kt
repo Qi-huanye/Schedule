@@ -101,6 +101,18 @@ class DesignRefinementTest {
         compose.onAllNodesWithText("将删除的课程").assertCountEquals(0)
     }
 
+    @Test fun presetSheetShowsTheLastOptionFullyWithoutAnExtraDrag() {
+        var selected = ""
+        compose.setContent { PureTheme("light") { ThemePresetSheet(ThemeSettings(), {}, { selected = it }) } }
+        val option = compose.onNode(hasText("新叶") and hasClickAction())
+        option.assertIsDisplayed()
+        val full = option.getUnclippedBoundsInRoot()
+        val visible = option.getBoundsInRoot()
+        assertEquals("The last option must be fully visible", (full.bottom - full.top).value, (visible.bottom - visible.top).value, 0.5f)
+        option.performClick()
+        compose.runOnIdle { assertEquals("green", selected) }
+    }
+
     @Test fun presetThemeIsUsedWithoutSystemColors() {
         var primary = androidx.compose.ui.graphics.Color.Unspecified
         compose.setContent { PureTheme("light", theme = ThemeSettings(ThemeSource.PRESET, "rose")) {

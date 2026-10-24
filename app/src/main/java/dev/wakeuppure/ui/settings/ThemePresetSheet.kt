@@ -20,7 +20,7 @@ import dev.wakeuppure.ui.components.SheetTitle
 
 @Composable
 internal fun ThemePresetSheet(theme: ThemeSettings, onDismiss: () -> Unit, onSelect: (String) -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).selectableGroup().padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
             SheetTitle("预设主题色")
             Text("选择后使用此配色，浅色与深色外观会自动适配。", style = MaterialTheme.typography.bodyMedium,
