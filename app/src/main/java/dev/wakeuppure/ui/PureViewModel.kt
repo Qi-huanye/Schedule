@@ -115,7 +115,8 @@ class PureViewModel(
         busy.value = true
         try { writes.withLock { withContext(Dispatchers.IO) { block() } } }
         catch (e: CancellationException) { throw e }
-        catch (e: Exception) { error.value = if (e is IllegalArgumentException && e.message.orEmpty().startsWith("ICS 导入失败：")) e.message
+        catch (e: Exception) { error.value = if (e is IllegalArgumentException &&
+            listOf("ICS 导入失败：", "时光序导入失败：").any { e.message.orEmpty().startsWith(it) }) e.message
             else if (e is IllegalArgumentException) "数据不完整或超出允许范围，请检查日期、周次、节次和作息时间。" else "操作未完成，请重试。原有课表未被覆盖。" }
         finally { busy.value = false }
     } }
@@ -180,6 +181,7 @@ class PureViewModel(
     fun parseImport(text: String) = action {
         imported.value = null
         pendingAppearance = null
+        require(text.toByteArray().size <= 5_000_000) { "文件过大，请选择小于 5 MB 的课表" }
         val trim = text.trim()
         val root = runCatching { json.parseToJsonElement(trim) as? JsonObject }.getOrNull()
         imported.value = if (root?.get("format")?.jsonPrimitive?.content == "WakeUpPure") {
@@ -188,6 +190,10 @@ class PureViewModel(
             pendingAppearance = backup.appearance.takeIf { it in listOf("system", "light", "dark") }
             backup.schedules
         } else listOf(shares.parseLocal(trim))
+    }
+    fun previewShiguangxu(data: List<ScheduleData>) {
+        pendingAppearance = null
+        imported.value = data
     }
     fun acceptImport(done: () -> Unit) = action {
         val data = requireNotNull(imported.value)

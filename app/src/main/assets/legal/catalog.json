@@ -838,6 +838,24 @@
       "projectUrl": "https://github.com/material-foundation/material-color-utilities",
       "kind": "source",
       "notice": "Copyright 2021 Google LLC. Used through MaterialKolor material-color-utilities (Kotlin port)."
+    },
+    {
+      "id": "com.journeyapps:zxing-android-embedded:4.3.0",
+      "name": "ZXing Android Embedded",
+      "licenses": [
+        "Apache-2.0"
+      ],
+      "projectUrl": "https://github.com/journeyapps/zxing-android-embedded",
+      "kind": "maven"
+    },
+    {
+      "id": "com.google.zxing:core:3.4.1",
+      "name": "ZXing Core",
+      "licenses": [
+        "Apache-2.0"
+      ],
+      "projectUrl": "https://github.com/zxing/zxing",
+      "kind": "maven"
     }
   ],
   "texts": {

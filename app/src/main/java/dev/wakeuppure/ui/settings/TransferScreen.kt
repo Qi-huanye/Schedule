@@ -38,7 +38,7 @@ private enum class ImportSheet { TEXT, TOKEN }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleData?, onClose: () -> Unit) {
+fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleData?, onShiguangxu: () -> Unit, onClose: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var sheet by remember { mutableStateOf<ImportSheet?>(null) }
@@ -98,6 +98,8 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
                 TransferActionCard(Icons.Default.ContentPaste, "文本导入", enabled = !busy, onClick = { openSheet(ImportSheet.TEXT) }, modifier = Modifier.weight(1f))
                 TransferActionCard(Icons.Default.Link, "WakeUp 口令", enabled = !busy, onClick = { openSheet(ImportSheet.TOKEN) }, modifier = Modifier.weight(1f))
             }
+            TransferActionCard(Icons.Default.QrCodeScanner, "时光序导入", enabled = !busy,
+                onClick = { vm.clearImport(); onShiguangxu() }, modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth())
             GroupTitle("导出")
             Surface(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp, bottomEnd = 32.dp, bottomStart = 16.dp),
                 color = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer) {

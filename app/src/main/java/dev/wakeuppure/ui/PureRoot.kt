@@ -188,7 +188,13 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
                                 vm.saveCourse(c, p, slots) { nav.popBackStack() } } }
                         }
                         composable("times") { data?.let { TimesScreen(it, busy, { nav.popBackStack() }) { s, slots -> vm.saveSchedule(s, slots) { nav.popBackStack() } } } }
-                        composable("transfer") { TransferScreen(vm, all, data) { nav.popBackStack() } }
+                        composable("transfer") { TransferScreen(vm, all, data, { nav.navigate("shiguangxu") }) { nav.popBackStack() } }
+                        composable("shiguangxu") {
+                            ShiguangxuImportScreen(onClose = { nav.popBackStack() }, onParsed = {
+                                vm.previewShiguangxu(it)
+                                nav.popBackStack()
+                            })
+                        }
                         composable("about") { AboutScreen({ nav.popBackStack() }, { nav.navigate("licenses") }, { nav.navigate("privacy") }) }
                         composable("licenses") { LicensesScreen { nav.popBackStack() } }
                         composable("privacy") { PrivacyScreen { nav.popBackStack() } }
