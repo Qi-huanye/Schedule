@@ -6,7 +6,8 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.triStateToggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,6 +22,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import dev.wakeuppure.data.export.ScheduleExporter
@@ -42,8 +45,8 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
     var text by remember { mutableStateOf("") }
     var exportText by remember { mutableStateOf("") }
     var chooseJsonSchedule by remember { mutableStateOf(false) }
-    var jsonScheduleId by remember { mutableStateOf<Long?>(null) }
-    var selectedJsonScheduleId by remember { mutableStateOf<Long?>(null) }
+    var selectedJsonScheduleIds by remember { mutableStateOf<Set<Long>?>(null) }
+    val exportSchedules = all.filter { selectedJsonScheduleIds?.contains(it.schedule.id) ?: true }
     val busy by vm.busy.collectAsState()
     val pending by vm.imported.collectAsState()
     val experimental by vm.experimentalToken.collectAsState()
@@ -101,16 +104,19 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Icon(Icons.Default.DataObject, null, Modifier.size(30.dp))
-                        Text("本应用 JSON", style = MaterialTheme.typography.headlineSmall)
+                        Text("JSON", style = MaterialTheme.typography.headlineSmall)
                     }
-                    val selected = all.firstOrNull { it.schedule.id == selectedJsonScheduleId }
-                    FilledTonalButton(onClick = { jsonScheduleId = selected?.schedule?.id; chooseJsonSchedule = true },
+                    FilledTonalButton(onClick = { chooseJsonSchedule = true },
                         enabled = all.isNotEmpty() && !busy, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth()) {
-                        Text(selected?.schedule?.name ?: "全部课表", Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(when {
+                            exportSchedules.size == all.size -> "全部课表"
+                            exportSchedules.size == 1 -> exportSchedules.single().schedule.name
+                            else -> "已选择 ${exportSchedules.size} 个课表"
+                        }, Modifier.weight(1f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         Icon(Icons.Default.ExpandMore, null)
                     }
-                    Button(onClick = { export("Schedule.json") { ScheduleExporter.appJson(selected?.let { listOf(it) } ?: all, vm.appearance.value) } },
-                        enabled = all.isNotEmpty() && !busy, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                    Button(onClick = { export("Schedule.json") { ScheduleExporter.appJson(exportSchedules, vm.appearance.value) } },
+                        enabled = exportSchedules.isNotEmpty() && !busy, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                         Icon(Icons.Default.Download, null); Spacer(Modifier.width(8.dp)); Text("导出 JSON")
                     }
                 }
@@ -157,21 +163,11 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
         }
         null -> {}
     }
-    if (chooseJsonSchedule) AlertDialog(onDismissRequest = { chooseJsonSchedule = false }, title = { Text("导出范围") }, text = {
-        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-            Row(Modifier.fillMaxWidth().clickable { jsonScheduleId = null }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = jsonScheduleId == null, onClick = { jsonScheduleId = null })
-                Text("全部课表", Modifier.padding(start = 8.dp))
-            }
-            all.forEach { schedule -> Row(Modifier.fillMaxWidth().clickable { jsonScheduleId = schedule.schedule.id }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = jsonScheduleId == schedule.schedule.id, onClick = { jsonScheduleId = schedule.schedule.id })
-                Text(schedule.schedule.name, Modifier.padding(start = 8.dp))
-            } }
-        }
-    }, confirmButton = { TextButton(onClick = {
-        selectedJsonScheduleId = jsonScheduleId
-        chooseJsonSchedule = false
-    }) { Text("确定") } }, dismissButton = { TextButton(onClick = { chooseJsonSchedule = false }) { Text("取消") } })
+    if (chooseJsonSchedule) ExportScheduleDialog(all, selectedJsonScheduleIds,
+        onDismiss = { chooseJsonSchedule = false }, onConfirm = { ids ->
+            selectedJsonScheduleIds = ids
+            chooseJsonSchedule = false
+        })
     pending?.let { schedules ->
         AlertDialog(onDismissRequest = vm::clearImport, title = { Text("导入课表") }, text = {
             Column(Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -180,6 +176,35 @@ fun TransferScreen(vm: PureViewModel, all: List<ScheduleData>, data: ScheduleDat
         }, confirmButton = { TextButton(onClick = { vm.acceptImport { toast("课表已导入") } }, enabled = !busy) { Text("导入") } },
             dismissButton = { TextButton(onClick = vm::clearImport, enabled = !busy) { Text("取消") } })
     }
+}
+
+@Composable
+internal fun ExportScheduleDialog(all: List<ScheduleData>, selectedIds: Set<Long>?, onDismiss: () -> Unit, onConfirm: (Set<Long>?) -> Unit) {
+    val availableIds = all.map { it.schedule.id }.toSet()
+    var ids by remember { mutableStateOf(selectedIds?.intersect(availableIds) ?: availableIds) }
+    val selectionState = when {
+        ids.isEmpty() -> ToggleableState.Off
+        ids == availableIds -> ToggleableState.On
+        else -> ToggleableState.Indeterminate
+    }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("导出范围") }, text = {
+        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+            Row(Modifier.fillMaxWidth().triStateToggleable(state = selectionState, role = Role.Checkbox,
+                onClick = { ids = if (ids == availableIds) emptySet() else availableIds }).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                TriStateCheckbox(state = selectionState, onClick = null)
+                Text("全部课表", Modifier.padding(start = 8.dp))
+            }
+            all.forEach { schedule ->
+                val id = schedule.schedule.id
+                Row(Modifier.fillMaxWidth().toggleable(value = id in ids, role = Role.Checkbox,
+                    onValueChange = { ids = if (it) ids + id else ids - id }).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = id in ids, onCheckedChange = null)
+                    Text(schedule.schedule.name, Modifier.padding(start = 8.dp))
+                }
+            }
+        }
+    }, confirmButton = { TextButton(enabled = ids.isNotEmpty(), onClick = { onConfirm(ids.takeUnless { it == availableIds }) }) { Text("确定") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
 }
 
 @Composable

@@ -64,7 +64,12 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
                 SegmentRow("每周第一天", listOf(1 to "周一", 7 to "周日"), s.firstDay, { value -> update { it.copy(firstDay = value) } }, 132.dp)
                 SettingRow("课程配色", if (followsBackground) "跟随背景" else null,
                     trailing = { if (!followsBackground) Swatches(paletteColors(data).take(4).map(::hexColor)) }) { sheet = "palette" }
-                SettingRow("提醒", if (s.reminderMinutes == null && s.todoReminderMinutes == null) "关闭" else "课程与待办") { sheet = "reminder" }
+                SettingRow("提醒", when {
+                    s.reminderMinutes != null && s.todoReminderMinutes != null -> "课程与待办"
+                    s.reminderMinutes != null -> "课程提醒"
+                    s.todoReminderMinutes != null -> "待办提醒"
+                    else -> "关闭"
+                }) { sheet = "reminder" }
                 SettingRow("新建课表", onClick = onNewSchedule)
                 SettingRow("删除此课表", titleColor = MaterialTheme.colorScheme.error, chevron = false, onClick = { sheet = "delete" })
             }

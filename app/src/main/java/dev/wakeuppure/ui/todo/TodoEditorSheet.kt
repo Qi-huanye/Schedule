@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.ui.Alignment
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,7 +59,7 @@ fun TodoEditorSheet(scheduleId: Long, courses: List<CourseWithPeriods>, now: Loc
                 }
             }
             if (todo != null) FilledTonalButton(onClick = { onSave(todo.copy(title = title.trim(), dueAt = due.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(), courseId = courseId, completed = !todo.completed)) }, enabled = title.isNotBlank() && !busy, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.Check, null, Modifier.size(18.dp))
+                Icon(if (todo.completed) Icons.AutoMirrored.Filled.Undo else Icons.Default.Check, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(if (todo.completed) "恢复未完成" else "标记完成")
             }

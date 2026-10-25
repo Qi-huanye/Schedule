@@ -47,7 +47,7 @@ class ExpressiveWorkflowTest {
         compose.onNodeWithText("每日时间表").assertIsDisplayed()
         compose.onNodeWithContentDescription("返回").performClick()
         compose.onNodeWithText("导入与导出").performScrollTo().performClick()
-        compose.onNodeWithText("本应用 JSON").assertIsDisplayed()
+        compose.onNodeWithText("JSON").assertIsDisplayed()
         compose.onNodeWithText("导出 JSON").assertExists()
         compose.onNodeWithContentDescription("返回").performClick()
         compose.onNodeWithText("课表").performClick()
