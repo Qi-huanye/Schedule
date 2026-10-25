@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -25,8 +26,8 @@ import java.time.temporal.ChronoUnit
 @Composable
 fun TodayScreen(data: ScheduleData, now: LocalDateTime, onCourse: (CourseWithPeriods) -> Unit, onToggleTodo: (Todo) -> Unit = {}, onTodo: (Todo) -> Unit = {}) {
     val date = now.toLocalDate()
-    val today = CourseFilter.onDate(data, date)
-    val next = CourseFilter.next(data, now)
+    val today = remember(data, date) { CourseFilter.onDate(data, date) }
+    val next = remember(data, now) { CourseFilter.next(data, now) }
     val active = today.firstOrNull { !now.isBefore(it.start) && now.isBefore(it.end) }
     val focus = active ?: next
     val completed = today.count { !now.isBefore(it.end) }

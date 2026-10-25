@@ -26,6 +26,7 @@ class PreparedTimetable internal constructor(
     private val load: suspend (Int) -> TimetableWeekLayout?,
     private val save: (TimetableWeekLayout) -> Unit,
 ) {
+    private val loading = Array(data.schedule.maxWeeks + 1) { Mutex() }
     private val weeks = object : LinkedHashMap<Int, TimetableWeekLayout>(12, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, TimetableWeekLayout>?) = size > 12
     }
@@ -41,8 +42,11 @@ class PreparedTimetable internal constructor(
 
     /** Used by the pager: a cache miss must never calculate a dense week during a UI frame. */
     suspend fun prepareWeek(week: Int): TimetableWeekLayout = withContext(Dispatchers.Default) {
-        cached(week) ?: (load(week)?.let(::remember)
-            ?: remember(TimetableLayout.calculate(data, week)).also(save))
+        require(week in 1..data.schedule.maxWeeks)
+        cached(week) ?: loading[week].withLock {
+            cached(week) ?: (load(week)?.let(::remember)
+                ?: remember(TimetableLayout.calculate(data, week)).also(save))
+        }
     }
 
     /** Read ahead of pager composition, with the requested week first. */
@@ -78,7 +82,8 @@ class TimetableCache(context: Context) {
             }
         }
         val current = WeekCalculator.week(data.schedule.semesterStartDate, date).coerceIn(1, data.schedule.maxWeeks)
-        prepared.prepareAround(current)
+        // Only the visible week gates startup. The pager prefetches neighbours after first draw.
+        prepared.prepareWeek(current)
         prepared
     }
 

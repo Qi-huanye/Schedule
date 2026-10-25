@@ -6,12 +6,18 @@ import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.domain.usecase.SemesterAdjustment
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.distinctUntilChanged
 import java.time.LocalDate
 import java.time.LocalTime
 
 class ScheduleRepository(private val db: PureDatabase) {
     private val dao = db.scheduleDao()
-    val schedules: Flow<List<ScheduleData>> = dao.observeSchedules().map { rows -> rows.map { it.model() } }
+    val schedules: Flow<List<ScheduleData>> = dao.observeSchedules()
+        .map { rows -> rows.map { it.model() } }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
 
     suspend fun snapshot(): List<ScheduleData> = dao.snapshot().map { it.model() }
 

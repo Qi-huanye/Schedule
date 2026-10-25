@@ -31,6 +31,27 @@ import java.time.LocalDateTime
 class DesignRefinementTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun denseStartupPreparesOnlyTheVisibleWeekBeforeShowingContent() {
+        val now = LocalDateTime.of(2026, 10, 19, 8, 0)
+        val data = ScheduleData(Schedule(id = 997, name = "密集启动", semesterStartDate = "2026-10-12", maxWeeks = 60),
+            List(200) { i -> CourseWithPeriods(Course(id = i + 1L, name = "课程 $i"),
+                List(20) { j -> CoursePeriod(id = i * 20L + j + 1, dayOfWeek = i % 7 + 1,
+                    startSection = i % 6 * 2 + 1, endSection = i % 6 * 2 + 2,
+                    startWeek = j + 3, endWeek = j + 3) }) })
+        val timetable = runBlocking { TimetableCache(ApplicationProvider.getApplicationContext()).prepare(data, now.toLocalDate()) }
+        assertNotNull(timetable.cached(2))
+        assertNull(timetable.cached(1))
+        assertNull(timetable.cached(3))
+        compose.setContent { PureTheme("light") {
+            val pager = rememberPagerState(initialPage = 1, pageCount = { 60 })
+            WeekPager(timetable, pager, now, {}, {})
+        } }
+        compose.onNodeWithTag("week_pager").assertIsDisplayed()
+        compose.onNodeWithTag("week_pager").performTouchInput { swipeLeft(durationMillis = 220) }
+        compose.waitForIdle()
+        compose.onNodeWithTag("week_pager").assertIsDisplayed()
+    }
+
     @Test fun nonCurrentWeekCoursesCanBeHiddenAndRestoredWithoutReloadingTheTimetable() {
         val now = LocalDateTime.of(2026, 10, 19, 8, 0)
         val data = ScheduleData(Schedule(id = 998, name = "显示设置", semesterStartDate = "2026-10-19"), listOf(

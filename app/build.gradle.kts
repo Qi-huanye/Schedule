@@ -53,6 +53,9 @@ android {
     buildTypes {
         getByName("release") {
             isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             if (!signingPath.isNullOrBlank()) signingConfig = signingConfigs.getByName("distribution")
         }
     }
