@@ -99,7 +99,11 @@ class PureViewModel(
         themePreferences.save(mutableTheme.value)
     }
     fun setThemePreset(id: String) {
-        mutableTheme.value = ThemeSettings(ThemeSource.PRESET, ThemePresets.find(id).id)
+        mutableTheme.update { it.copy(source = ThemeSource.PRESET, preset = ThemePresets.find(id).id) }
+        themePreferences.save(mutableTheme.value)
+    }
+    fun setInterfaceScale(percent: Int) {
+        mutableTheme.update { it.copy(interfaceScalePercent = InterfaceSize.clamp(percent)) }
         themePreferences.save(mutableTheme.value)
     }
     fun setExperimentalToken(value: Boolean) {

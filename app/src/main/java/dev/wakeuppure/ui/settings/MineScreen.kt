@@ -81,6 +81,7 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
         }
         SettingsSection("外观") {
             SegmentRow("外观模式", listOf("system" to "系统", "light" to "浅色", "dark" to "深色"), appearance, vm::setAppearance, 200.dp)
+            SettingRow("界面大小", if (theme.interfaceScalePercent == InterfaceSize.DEFAULT_PERCENT) "跟随系统" else "${theme.interfaceScalePercent}%") { sheet = "size" }
             val imageTheme = background.hasImage && background.settings.imageTheme
             SwitchRow("系统动态取色", !imageTheme && theme.source == ThemeSource.SYSTEM && Build.VERSION.SDK_INT >= 31,
                 vm::setSystemColors, enabled = !imageTheme && Build.VERSION.SDK_INT >= 31,
@@ -108,6 +109,7 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
     }
     val close = { sheet = null }
     when (sheet) {
+        "size" -> InterfaceSizeSheet(theme.interfaceScalePercent, data?.schedule?.showWeekend != false, close) { vm.setInterfaceScale(it); close() }
         "theme" -> ThemePresetSheet(theme, close) { vm.setThemePreset(it); close() }
         else -> if (data != null) when (sheet) {
             "name" -> RenameDialog(data.schedule.name, close) { name -> update { it.copy(name = name) }; close() }

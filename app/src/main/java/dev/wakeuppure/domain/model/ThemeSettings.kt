@@ -2,7 +2,19 @@ package dev.wakeuppure.domain.model
 
 enum class ThemeSource { SYSTEM, PRESET }
 
-data class ThemeSettings(val source: ThemeSource = ThemeSource.SYSTEM, val preset: String = "teal")
+data class ThemeSettings(
+    val source: ThemeSource = ThemeSource.SYSTEM,
+    val preset: String = "teal",
+    val interfaceScalePercent: Int = InterfaceSize.DEFAULT_PERCENT,
+)
+
+object InterfaceSize {
+    const val MIN_PERCENT = 60
+    const val MAX_PERCENT = 140
+    const val DEFAULT_PERCENT = 100
+    const val STEP_PERCENT = 5
+    fun clamp(percent: Int) = percent.coerceIn(MIN_PERCENT, MAX_PERCENT)
+}
 
 data class ThemePreset(val id: String, val name: String, val seed: Int)
 

@@ -46,14 +46,16 @@ fun PureTheme(mode: String, background: BackgroundUiState? = null, theme: ThemeS
         titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold),
         titleMedium = base.titleMedium.copy(fontWeight = FontWeight.SemiBold),
     )
-    MaterialExpressiveTheme(
-        colorScheme = colors,
-        typography = typography,
-        motionScheme = MotionScheme.expressive(),
-        shapes = Shapes(
-            extraSmall = RoundedCornerShape(8.dp), small = RoundedCornerShape(12.dp),
-            medium = RoundedCornerShape(20.dp), large = RoundedCornerShape(28.dp),
-            extraLarge = RoundedCornerShape(32.dp),
-        ),
-    ) { BackgroundContainer(background, dark, content) }
+    InterfaceScale(theme.interfaceScalePercent) {
+        MaterialExpressiveTheme(
+            colorScheme = colors,
+            typography = typography,
+            motionScheme = MotionScheme.expressive(),
+            shapes = Shapes(
+                extraSmall = RoundedCornerShape(8.dp), small = RoundedCornerShape(12.dp),
+                medium = RoundedCornerShape(20.dp), large = RoundedCornerShape(28.dp),
+                extraLarge = RoundedCornerShape(32.dp),
+            ),
+        ) { BackgroundContainer(background, dark, content) }
+    }
 }

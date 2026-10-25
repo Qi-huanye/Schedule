@@ -32,4 +32,22 @@ class ThemePreferencesTest {
         context.getSharedPreferences("preferences", 0).edit().putString("theme_source", "invalid").putString("theme_preset", "unknown").commit()
         assertEquals(ThemeSettings(), ThemePreferences(context).read())
     }
+
+    @Test fun interfaceSizeSurvivesRecreationAndColorChanges() {
+        val preferences = ThemePreferences(context)
+        preferences.save(ThemeSettings(interfaceScalePercent = 75))
+        assertEquals(75, ThemePreferences(context).read().interfaceScalePercent)
+        preferences.save(preferences.read().copy(source = ThemeSource.PRESET, preset = "blue"))
+        assertEquals(75, ThemePreferences(context).read().interfaceScalePercent)
+        preferences.save(preferences.read().copy(interfaceScalePercent = InterfaceSize.DEFAULT_PERCENT))
+        assertEquals(100, ThemePreferences(context).read().interfaceScalePercent)
+    }
+
+    @Test fun invalidStoredSizeIsClampedToSupportedRange() {
+        val storage = context.getSharedPreferences("preferences", 0)
+        storage.edit().putInt("interface_scale_percent", 0).commit()
+        assertEquals(InterfaceSize.MIN_PERCENT, ThemePreferences(context).read().interfaceScalePercent)
+        storage.edit().putInt("interface_scale_percent", 1000).commit()
+        assertEquals(InterfaceSize.MAX_PERCENT, ThemePreferences(context).read().interfaceScalePercent)
+    }
 }
