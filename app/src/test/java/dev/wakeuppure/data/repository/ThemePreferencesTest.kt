@@ -50,4 +50,14 @@ class ThemePreferencesTest {
         storage.edit().putInt("interface_scale_percent", 1000).commit()
         assertEquals(InterfaceSize.MAX_PERCENT, ThemePreferences(context).read().interfaceScalePercent)
     }
+
+    @Test fun hidingNonCurrentWeekCoursesSurvivesRecreationAndOtherVisualChanges() {
+        val preferences = ThemePreferences(context)
+        assertTrue(preferences.read().showNonCurrentWeekCourses)
+        preferences.save(preferences.read().copy(showNonCurrentWeekCourses = false))
+        val recreated = ThemePreferences(context)
+        assertFalse(recreated.read().showNonCurrentWeekCourses)
+        recreated.save(recreated.read().copy(preset = "blue", interfaceScalePercent = 90))
+        assertFalse(ThemePreferences(context).read().showNonCurrentWeekCourses)
+    }
 }

@@ -6,6 +6,7 @@ data class ThemeSettings(
     val source: ThemeSource = ThemeSource.SYSTEM,
     val preset: String = "teal",
     val interfaceScalePercent: Int = InterfaceSize.DEFAULT_PERCENT,
+    val showNonCurrentWeekCourses: Boolean = true,
 )
 
 object InterfaceSize {

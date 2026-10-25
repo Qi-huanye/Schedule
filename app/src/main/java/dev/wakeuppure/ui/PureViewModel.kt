@@ -106,6 +106,10 @@ class PureViewModel(
         mutableTheme.update { it.copy(interfaceScalePercent = InterfaceSize.clamp(percent)) }
         themePreferences.save(mutableTheme.value)
     }
+    fun setShowNonCurrentWeekCourses(enabled: Boolean) {
+        mutableTheme.update { it.copy(showNonCurrentWeekCourses = enabled) }
+        themePreferences.save(mutableTheme.value)
+    }
     fun setExperimentalToken(value: Boolean) {
         experimentalToken.value = value
         prefs.edit().putBoolean("experimentalToken", value).apply()

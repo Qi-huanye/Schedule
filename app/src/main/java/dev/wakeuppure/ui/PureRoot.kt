@@ -173,7 +173,7 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
                         composable("timetable") {
                             if (data == null) EmptySchedule(createSchedule, openTransfer)
                             else TimetableScreen(requireNotNull(state.schedules.timetable), all, now, { detail = it }, { editCourse = it; nav.navigate("course") }, { editingTodo = it }, vm::select, createSchedule, openTransfer,
-                                prefetchEnabled = firstFrameDrawn)
+                                prefetchEnabled = firstFrameDrawn, showNonCurrentWeekCourses = themeSettings.showNonCurrentWeekCourses)
                         }
                         composable("today") {
                             if (data == null) EmptySchedule(createSchedule, openTransfer) else TodayScreen(data, now, { detail = it }, vm::toggleTodo, { editingTodo = it })

@@ -46,7 +46,7 @@ import java.time.*
 @Composable
 fun TimetableScreen(timetable: PreparedTimetable, all: List<ScheduleData>, now: LocalDateTime, onDetail: (CourseWithPeriods) -> Unit,
     onEdit: (CourseWithPeriods) -> Unit, onTodo: (Todo) -> Unit, onSelect: (Long) -> Unit, onNewSchedule: () -> Unit, onImport: () -> Unit,
-    prefetchEnabled: Boolean = true) {
+    prefetchEnabled: Boolean = true, showNonCurrentWeekCourses: Boolean = true) {
     val data = timetable.data
     val current = WeekCalculator.week(data.schedule.semesterStartDate, now.toLocalDate())
     val pager = key(data.schedule.id, current, data.schedule.maxWeeks) {
@@ -111,7 +111,7 @@ fun TimetableScreen(timetable: PreparedTimetable, all: List<ScheduleData>, now: 
         }
         if (current < 1 || current > data.schedule.maxWeeks) Text(if (current < 1) "尚未开学" else "本学期已结束",
             Modifier.align(Alignment.CenterHorizontally).background(backgroundPanelColor()).padding(bottom = 8.dp), color = MaterialTheme.colorScheme.secondary)
-        WeekPager(timetable, pager, now, onDetail, onEdit, Modifier.fillMaxWidth().weight(1f), onTodo)
+        WeekPager(timetable, pager, now, onDetail, onEdit, Modifier.fillMaxWidth().weight(1f), onTodo, showNonCurrentWeekCourses)
     }
     if (showOverdue) TodoListSheet("逾期待办", overdue, { showOverdue = false }, onTodo)
     if (panel) WeekSchedulePanel(data, all, week, current, onDismiss = { panel = false },
@@ -121,13 +121,14 @@ fun TimetableScreen(timetable: PreparedTimetable, all: List<ScheduleData>, now: 
 
 @Composable
 internal fun WeekPager(timetable: PreparedTimetable, pager: PagerState, now: LocalDateTime,
-    onDetail: (CourseWithPeriods) -> Unit, onEdit: (CourseWithPeriods) -> Unit, modifier: Modifier = Modifier, onTodo: (Todo) -> Unit = {}) {
+    onDetail: (CourseWithPeriods) -> Unit, onEdit: (CourseWithPeriods) -> Unit, modifier: Modifier = Modifier, onTodo: (Todo) -> Unit = {},
+    showNonCurrentWeekCourses: Boolean = true) {
     HorizontalPager(state = pager, modifier = modifier.testTag("week_pager"), beyondViewportPageCount = 1,
         key = { it }, flingBehavior = PagerDefaults.flingBehavior(pager, snapPositionalThreshold = 0.35f)) { page ->
         val layout by key(timetable, page) {
             produceState(initialValue = timetable.cached(page + 1)) { value = timetable.prepareWeek(page + 1) }
         }
-        layout?.let { TimetableWeek(timetable.data, it, now, onDetail, onEdit, onTodo) }
+        layout?.let { TimetableWeek(timetable.data, it, now, onDetail, onEdit, onTodo, showNonCurrentWeekCourses) }
             ?: Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
     }
 }
@@ -135,7 +136,8 @@ internal fun WeekPager(timetable: PreparedTimetable, pager: PagerState, now: Loc
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TimetableWeek(data: ScheduleData, layout: TimetableWeekLayout, now: LocalDateTime,
-    onDetail: (CourseWithPeriods) -> Unit, onEdit: (CourseWithPeriods) -> Unit, onTodo: (Todo) -> Unit) {
+    onDetail: (CourseWithPeriods) -> Unit, onEdit: (CourseWithPeriods) -> Unit, onTodo: (Todo) -> Unit,
+    showNonCurrentWeekCourses: Boolean) {
     val today = now.toLocalDate().toEpochDay()
     val second = now.toLocalTime().toSecondOfDay()
     val fontScale = LocalDensity.current.fontScale
@@ -180,6 +182,7 @@ private fun TimetableWeek(data: ScheduleData, layout: TimetableWeekLayout, now: 
                     layout.days.forEach { day ->
                         BoxWithConstraints(Modifier.weight(1f).height(height * slots.size)) {
                             day.cards.forEach { card ->
+                                if (card.ghost && !showNonCurrentWeekCourses) return@forEach
                                 val course = data.courses[card.courseIndex]
                                 val period = course.periods[card.periodIndex]
                                 val ghost = card.ghost

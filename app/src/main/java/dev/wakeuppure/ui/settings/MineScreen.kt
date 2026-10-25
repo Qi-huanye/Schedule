@@ -80,6 +80,8 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
             }
         }
         SettingsSection("外观") {
+            SwitchRow("显示非本周课程", theme.showNonCurrentWeekCourses, vm::setShowNonCurrentWeekCourses,
+                subtitle = "对所有课表生效")
             SegmentRow("外观模式", listOf("system" to "系统", "light" to "浅色", "dark" to "深色"), appearance, vm::setAppearance, 200.dp)
             SettingRow("界面大小", if (theme.interfaceScalePercent == InterfaceSize.DEFAULT_PERCENT) "跟随系统" else "${theme.interfaceScalePercent}%") { sheet = "size" }
             val imageTheme = background.hasImage && background.settings.imageTheme

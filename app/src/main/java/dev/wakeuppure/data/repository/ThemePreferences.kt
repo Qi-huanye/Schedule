@@ -10,10 +10,12 @@ class ThemePreferences(context: Context) {
         source = runCatching { ThemeSource.valueOf(preferences.getString("theme_source", null).orEmpty()) }.getOrDefault(ThemeSource.SYSTEM),
         preset = ThemePresets.find(preferences.getString("theme_preset", null).orEmpty()).id,
         interfaceScalePercent = InterfaceSize.clamp(preferences.getInt("interface_scale_percent", InterfaceSize.DEFAULT_PERCENT)),
+        showNonCurrentWeekCourses = preferences.getBoolean("show_non_current_week_courses", true),
     )
     fun save(settings: ThemeSettings) {
         preferences.edit().putString("theme_source", settings.source.name)
             .putString("theme_preset", ThemePresets.find(settings.preset).id)
-            .putInt("interface_scale_percent", InterfaceSize.clamp(settings.interfaceScalePercent)).apply()
+            .putInt("interface_scale_percent", InterfaceSize.clamp(settings.interfaceScalePercent))
+            .putBoolean("show_non_current_week_courses", settings.showNonCurrentWeekCourses).apply()
     }
 }

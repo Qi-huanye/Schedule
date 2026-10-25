@@ -31,6 +31,27 @@ import java.time.LocalDateTime
 class DesignRefinementTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun nonCurrentWeekCoursesCanBeHiddenAndRestoredWithoutReloadingTheTimetable() {
+        val now = LocalDateTime.of(2026, 10, 19, 8, 0)
+        val data = ScheduleData(Schedule(id = 998, name = "显示设置", semesterStartDate = "2026-10-19"), listOf(
+            CourseWithPeriods(Course(id = 1, name = "本周课程"), listOf(CoursePeriod(id = 1, dayOfWeek = 1))),
+            CourseWithPeriods(Course(id = 2, name = "隔周课程"), listOf(CoursePeriod(id = 2, dayOfWeek = 2, startWeek = 2, endWeek = 2))),
+        ))
+        val timetable = runBlocking { TimetableCache(ApplicationProvider.getApplicationContext()).prepare(data, now.toLocalDate()) }
+        var showOthers by mutableStateOf(true)
+        compose.setContent { PureTheme("light") {
+            val pager = rememberPagerState(pageCount = { 20 })
+            WeekPager(timetable, pager, now, {}, {}, showNonCurrentWeekCourses = showOthers)
+        } }
+        compose.onAllNodesWithText("本周课程").onFirst().assertExists()
+        compose.onNodeWithContentDescription("隔周课程，1至2节，非本周").assertExists()
+        compose.runOnIdle { showOthers = false }
+        compose.onNodeWithContentDescription("隔周课程，1至2节，非本周").assertDoesNotExist()
+        compose.onAllNodesWithText("本周课程").onFirst().assertExists()
+        compose.runOnIdle { showOthers = true }
+        compose.onNodeWithContentDescription("隔周课程，1至2节，非本周").assertExists()
+    }
+
     @Test fun denseWeekSwipesSettleAtNarrowWidthAndLargeFont() {
         val now = LocalDateTime.of(2026, 10, 19, 8, 0)
         val data = ScheduleData(Schedule(name = "滑动回归", semesterStartDate = "2026-10-19"),
