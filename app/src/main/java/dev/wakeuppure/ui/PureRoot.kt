@@ -85,11 +85,12 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
     var addingTodo by remember { mutableStateOf(false) }
     var editingTodo by remember { mutableStateOf<Todo?>(null) }
     var fabMenuExpanded by remember { mutableStateOf(false) }
+    var timetableScrolled by remember { mutableStateOf(false) }
     val nav = rememberNavController()
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: if (openToday) "today" else "timetable"
     BackHandler(fabMenuExpanded) { fabMenuExpanded = false }
-    LaunchedEffect(route) { fabMenuExpanded = false }
+    LaunchedEffect(route) { fabMenuExpanded = false; timetableScrolled = false }
     var openedInitialTodo by remember { mutableStateOf(false) }
     LaunchedEffect(initialTodoId, initialScheduleId, data?.schedule?.id) {
         if (!openedInitialTodo && initialTodoId != null) {
@@ -124,7 +125,8 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
                     }
                 }
             }, floatingActionButton = {
-                if (route == "timetable" && data != null) {
+                AnimatedVisibility(route == "timetable" && data != null && !timetableScrolled,
+                    enter = fadeIn(effects) + scaleIn(), exit = fadeOut(effects) + scaleOut()) {
                     FloatingActionButtonMenu(
                         expanded = fabMenuExpanded,
                         button = {
@@ -173,7 +175,11 @@ fun PureRoot(vm: PureViewModel = viewModel(), updates: AppUpdateViewModel? = nul
                         composable("timetable") {
                             if (data == null) EmptySchedule(createSchedule, openTransfer)
                             else TimetableScreen(requireNotNull(state.schedules.timetable), all, now, { detail = it }, { editCourse = it; nav.navigate("course") }, { editingTodo = it }, vm::select, createSchedule, openTransfer,
-                                prefetchEnabled = firstFrameDrawn, showNonCurrentWeekCourses = themeSettings.showNonCurrentWeekCourses)
+                                prefetchEnabled = firstFrameDrawn, showNonCurrentWeekCourses = themeSettings.showNonCurrentWeekCourses,
+                                onScrolled = { collapsed ->
+                                    timetableScrolled = collapsed
+                                    if (collapsed) fabMenuExpanded = false
+                                })
                         }
                         composable("today") {
                             if (data == null) EmptySchedule(createSchedule, openTransfer) else TodayScreen(data, now, { detail = it }, vm::toggleTodo, { editingTodo = it })
