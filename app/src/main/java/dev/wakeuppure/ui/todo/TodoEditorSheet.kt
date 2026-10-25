@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
 
 package dev.wakeuppure.ui.todo
 
@@ -54,8 +54,20 @@ fun TodoEditorSheet(scheduleId: Long, courses: List<CourseWithPeriods>, now: Loc
                     label = { Text("关联课程（可选）") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
                     modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth())
                 ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    DropdownMenuItem(text = { Text("不关联课程") }, onClick = { courseId = null; expanded = false })
-                    courses.forEach { item -> DropdownMenuItem(text = { Text(item.course.name) }, onClick = { courseId = item.course.id; expanded = false }) }
+                    DropdownMenuItem(selected = courseId == null,
+                        onClick = { courseId = null; expanded = false },
+                        text = { Text("不关联课程") }, shapes = MenuDefaults.itemShape(0, 1),
+                        checkedLeadingIcon = { Icon(Icons.Default.Check, null) })
+                    if (courses.isNotEmpty()) {
+                        HorizontalDivider(Modifier.padding(horizontal = MenuDefaults.HorizontalDividerPadding))
+                        courses.forEachIndexed { index, item ->
+                            DropdownMenuItem(selected = courseId == item.course.id,
+                                onClick = { courseId = item.course.id; expanded = false },
+                                text = { Text(item.course.name, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
+                                shapes = MenuDefaults.itemShape(index, courses.size),
+                                checkedLeadingIcon = { Icon(Icons.Default.Check, null) })
+                        }
+                    }
                 }
             }
             if (todo != null) FilledTonalButton(onClick = { onSave(todo.copy(title = title.trim(), dueAt = due.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(), courseId = courseId, completed = !todo.completed)) }, enabled = title.isNotBlank() && !busy, modifier = Modifier.fillMaxWidth()) {

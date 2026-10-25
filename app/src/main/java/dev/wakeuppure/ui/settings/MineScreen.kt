@@ -10,6 +10,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -56,37 +58,41 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
         if (data != null) {
             val s = data.schedule
             SettingsSection("当前课表") {
-                SettingRow("名称", s.name) { sheet = "name" }
+                SettingRow("名称", s.name, leadingIcon = Icons.Default.Edit) { sheet = "name" }
                 val start = runCatching { LocalDate.parse(s.semesterStartDate) }.getOrNull()
-                SettingRow("学期", listOfNotNull(start?.let { "${it.monthValue}月${it.dayOfMonth}日开学" }, "共 ${s.maxWeeks} 周").joinToString("，")) { sheet = "term" }
-                SettingRow("作息时间", "每天 ${data.timeSlots.size} 节", onClick = onTimes)
-                SwitchRow("显示周末", s.showWeekend, { value -> update { it.copy(showWeekend = value) } })
+                SettingRow("学期", listOfNotNull(start?.let { "${it.monthValue}月${it.dayOfMonth}日开学" }, "共 ${s.maxWeeks} 周").joinToString("，"),
+                    leadingIcon = Icons.Default.CalendarMonth) { sheet = "term" }
+                SettingRow("作息时间", "每天 ${data.timeSlots.size} 节", leadingIcon = Icons.Default.Schedule, onClick = onTimes)
+                SwitchRow("显示周末", s.showWeekend, { value -> update { it.copy(showWeekend = value) } }, leadingIcon = Icons.Default.DateRange)
                 SegmentRow("每周第一天", listOf(1 to "周一", 7 to "周日"), s.firstDay, { value -> update { it.copy(firstDay = value) } }, 132.dp)
                 SettingRow("课程配色", if (followsBackground) "跟随背景" else null,
-                    trailing = { if (!followsBackground) Swatches(paletteColors(data).take(4).map(::hexColor)) }) { sheet = "palette" }
+                    trailing = { if (!followsBackground) Swatches(paletteColors(data).take(4).map(::hexColor)) }, leadingIcon = Icons.Default.Palette) { sheet = "palette" }
                 SettingRow("提醒", when {
                     s.reminderMinutes != null && s.todoReminderMinutes != null -> "课程与待办"
                     s.reminderMinutes != null -> "课程提醒"
                     s.todoReminderMinutes != null -> "待办提醒"
                     else -> "关闭"
-                }) { sheet = "reminder" }
-                SettingRow("新建课表", onClick = onNewSchedule)
-                SettingRow("删除此课表", titleColor = MaterialTheme.colorScheme.error, chevron = false, onClick = { sheet = "delete" })
+                }, leadingIcon = Icons.Default.Notifications) { sheet = "reminder" }
+                SettingRow("新建课表", leadingIcon = Icons.Default.Add, onClick = onNewSchedule)
+                SettingRow("删除此课表", titleColor = MaterialTheme.colorScheme.error, chevron = false,
+                    leadingIcon = Icons.Default.Delete, onClick = { sheet = "delete" })
             }
         } else {
             SettingsSection("课表") {
-                SettingRow("新建课表", onClick = onNewSchedule)
-                SettingRow("导入课表", onClick = onTransfer)
+                SettingRow("新建课表", leadingIcon = Icons.Default.Add, onClick = onNewSchedule)
+                SettingRow("导入课表", leadingIcon = Icons.Default.FileOpen, onClick = onTransfer)
             }
         }
         SettingsSection("外观") {
             SwitchRow("显示非本周课程", theme.showNonCurrentWeekCourses, vm::setShowNonCurrentWeekCourses,
-                subtitle = "对所有课表生效")
+                subtitle = "对所有课表生效", leadingIcon = Icons.Default.Visibility)
             SegmentRow("外观模式", listOf("system" to "系统", "light" to "浅色", "dark" to "深色"), appearance, vm::setAppearance, 200.dp)
-            SettingRow("界面大小", if (theme.interfaceScalePercent == InterfaceSize.DEFAULT_PERCENT) "跟随系统" else "${theme.interfaceScalePercent}%") { sheet = "size" }
+            SettingRow("界面大小", if (theme.interfaceScalePercent == InterfaceSize.DEFAULT_PERCENT) "跟随系统" else "${theme.interfaceScalePercent}%",
+                leadingIcon = Icons.Default.Tune) { sheet = "size" }
             val imageTheme = background.hasImage && background.settings.imageTheme
             SwitchRow("系统动态取色", !imageTheme && theme.source == ThemeSource.SYSTEM && Build.VERSION.SDK_INT >= 31,
                 vm::setSystemColors, enabled = !imageTheme && Build.VERSION.SDK_INT >= 31,
+                leadingIcon = Icons.Default.AutoAwesome,
                 subtitle = when {
                     imageTheme -> "正在使用背景图片取色，关闭“主题跟随背景”后可更改"
                     Build.VERSION.SDK_INT < 31 -> "Android 12 及以上可用，当前使用预设主题色"
@@ -96,17 +102,17 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
                 imageTheme -> "关闭背景取色后可选择"
                 theme.source == ThemeSource.SYSTEM && Build.VERSION.SDK_INT >= 31 -> "选择预设可替代系统配色"
                 else -> ThemePresets.find(theme.preset).name
-            },
+            }, leadingIcon = Icons.Default.ColorLens,
                 onClick = if (imageTheme) null else ({ sheet = "theme" }))
             BackgroundSettingsSection(background, onChooseImage, backgrounds::clearBackground, backgrounds::setImageTheme,
                 backgrounds::previewBlur, backgrounds::commitBlur, backgrounds::setFocus)
         }
         SettingsSection("数据") {
-            SettingRow("导入与导出", onClick = onTransfer)
+            SettingRow("导入与导出", leadingIcon = Icons.Default.SwapVert, onClick = onTransfer)
         }
         SettingsSection("关于") {
             AppUpdateSettings(updateState, updates::setAutoCheckEnabled, { updates.checkForUpdates(manual = true) }, updates::showAvailableUpdate)
-            SettingRow("关于 Schedule", "源代码、开源许可与隐私", onClick = onAbout)
+            SettingRow("关于 Schedule", "源代码、开源许可与隐私", leadingIcon = Icons.Default.Info, onClick = onAbout)
         }
     }
     val close = { sheet = null }

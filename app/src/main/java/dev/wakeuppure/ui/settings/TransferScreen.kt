@@ -9,6 +9,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.selection.triStateToggleable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -190,18 +193,36 @@ internal fun ExportScheduleDialog(all: List<ScheduleData>, selectedIds: Set<Long
         else -> ToggleableState.Indeterminate
     }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("导出范围") }, text = {
-        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-            Row(Modifier.fillMaxWidth().triStateToggleable(state = selectionState, role = Role.Checkbox,
-                onClick = { ids = if (ids == availableIds) emptySet() else availableIds }).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val rowShape = RoundedCornerShape(16.dp)
+            Row(Modifier.fillMaxWidth().heightIn(min = 64.dp)
+                .background(if (selectionState == ToggleableState.On) MaterialTheme.colorScheme.secondaryContainer
+                    else MaterialTheme.colorScheme.surfaceContainerLow, rowShape).clip(rowShape)
+                .triStateToggleable(state = selectionState, role = Role.Checkbox,
+                    onClick = { ids = if (ids == availableIds) emptySet() else availableIds })
+                .padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 TriStateCheckbox(state = selectionState, onClick = null)
-                Text("全部课表", Modifier.padding(start = 8.dp))
+                Column(Modifier.padding(start = 8.dp)) {
+                    Text("全部课表", style = MaterialTheme.typography.bodyLarge)
+                    Text("${all.size} 份课表", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             all.forEach { schedule ->
                 val id = schedule.schedule.id
-                Row(Modifier.fillMaxWidth().toggleable(value = id in ids, role = Role.Checkbox,
-                    onValueChange = { ids = if (it) ids + id else ids - id }).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                val selected = id in ids
+                Row(Modifier.fillMaxWidth().heightIn(min = 72.dp)
+                    .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow, rowShape)
+                    .clip(rowShape)
+                    .toggleable(value = selected, role = Role.Checkbox,
+                        onValueChange = { ids = if (it) ids + id else ids - id })
+                    .padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = id in ids, onCheckedChange = null)
-                    Text(schedule.schedule.name, Modifier.padding(start = 8.dp))
+                    Column(Modifier.padding(start = 8.dp)) {
+                        Text(schedule.schedule.name, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text("${schedule.courses.size} 门课程", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }

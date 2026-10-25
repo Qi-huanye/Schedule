@@ -37,6 +37,19 @@ class TodoFlowTest {
         compose.runOnIdle { assertEquals(LocalTime.of(17,30), Instant.ofEpochMilli(saved!!.dueAt).atZone(ZoneId.systemDefault()).toLocalTime()) }
     }
 
+    @Test fun courseMenuShowsSelectedStateAndSavesTheChosenCourse() {
+        val course = CourseWithPeriods(Course(id = 42, name = "微积分"), emptyList())
+        var saved: Todo? = null
+        compose.setContent { PureTheme("light") {
+            TodoEditorSheet(1, listOf(course), now, {}, { saved = it })
+        } }
+        compose.onNodeWithText("不关联课程").performClick()
+        compose.onNodeWithText("微积分").assertIsDisplayed().performClick()
+        compose.onNodeWithText("待办事项").performTextInput("复习积分")
+        compose.onNodeWithText("保存").performClick()
+        compose.runOnIdle { assertEquals(42L, saved!!.courseId) }
+    }
+
     @Test fun existingTodoCanBeCompletedEditedAndDeletedWithConfirmation() {
         var saved: Todo? = null
         var deleted = false

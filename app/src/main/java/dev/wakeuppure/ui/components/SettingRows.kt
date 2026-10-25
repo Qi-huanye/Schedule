@@ -5,12 +5,13 @@ package dev.wakeuppure.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.role
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
@@ -20,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,23 +42,35 @@ fun GroupTitle(text: String) {
 @Composable
 fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     GroupTitle(title)
-    Surface(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), shape = MaterialTheme.shapes.large,
-        color = backgroundPanelColor(MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Column(Modifier.padding(vertical = 6.dp), content = content)
-    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp), content = content)
+}
+
+@Composable
+fun SettingPanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(modifier.fillMaxWidth()
+        .background(backgroundPanelColor(MaterialTheme.colorScheme.surfaceContainerLow), shape)
+        .clip(shape), content = content)
 }
 
 /** "Title — value ›" row; a null [onClick] renders a static row. */
 @Composable
 fun SettingRow(title: String, value: String? = null, titleColor: Color = Color.Unspecified, chevron: Boolean = true,
-    trailing: @Composable (RowScope.() -> Unit)? = null, onClick: (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-        .heightIn(min = 64.dp).padding(start = 20.dp, end = 16.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(title, color = titleColor, style = MaterialTheme.typography.bodyLarge)
+    trailing: @Composable (RowScope.() -> Unit)? = null, leadingIcon: ImageVector? = null,
+    onClick: (() -> Unit)? = null) {
+    val shape = RoundedCornerShape(16.dp)
+    Row(Modifier.fillMaxWidth().heightIn(min = if (value == null) 56.dp else 72.dp)
+        .background(backgroundPanelColor(MaterialTheme.colorScheme.surfaceContainerLow), shape).clip(shape)
+        .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (leadingIcon != null) Icon(leadingIcon, null, Modifier.size(24.dp),
+            tint = if (titleColor != Color.Unspecified) titleColor else MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, color = titleColor, style = MaterialTheme.typography.bodyLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (value != null) Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium)
+                style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         trailing?.invoke(this)
         if (chevron && onClick != null) Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -64,9 +78,14 @@ fun SettingRow(title: String, value: String? = null, titleColor: Color = Color.U
 }
 
 @Composable
-fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true, subtitle: String? = null) {
-    Row(Modifier.fillMaxWidth().toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange).heightIn(min = 64.dp)
-        .padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+fun SwitchRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true, subtitle: String? = null,
+    leadingIcon: ImageVector? = null) {
+    val shape = RoundedCornerShape(16.dp)
+    Row(Modifier.fillMaxWidth().toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
+        .heightIn(min = if (subtitle == null) 56.dp else 72.dp)
+        .background(backgroundPanelColor(MaterialTheme.colorScheme.surfaceContainerLow), shape).clip(shape)
+        .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (leadingIcon != null) Icon(leadingIcon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
             subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -93,9 +112,11 @@ fun <T> Segments(options: List<Pair<T, String>>, selected: T, onChange: (T) -> U
 
 @Composable
 fun <T> SegmentRow(title: String, options: List<Pair<T, String>>, selected: T, onChange: (T) -> Unit, width: Dp, enabled: Boolean = true) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    SettingPanel {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(title, style = MaterialTheme.typography.bodyLarge)
         Segments(options, selected, onChange, Modifier.widthIn(min = width).fillMaxWidth(), enabled)
+        }
     }
 }
 

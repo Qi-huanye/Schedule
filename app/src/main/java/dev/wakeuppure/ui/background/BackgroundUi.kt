@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.wakeuppure.domain.model.BackgroundFocus
 import dev.wakeuppure.ui.components.SegmentRow
+import dev.wakeuppure.ui.components.SettingPanel
 import dev.wakeuppure.ui.components.SettingRow
 import dev.wakeuppure.ui.components.SwitchRow
 import kotlin.math.roundToInt
@@ -182,7 +183,8 @@ fun BackgroundSettingsSection(
     // The page itself sits on the photo, so every adjustment below previews live without a large thumbnail.
     Column {
         if (!state.hasImage) SettingRow("背景图片", "未设置", onClick = if (state.busy) null else onChoose)
-        else Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        else SettingPanel {
+            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("背景图片", Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
             state.bitmap?.let { bitmap ->
                 val image = remember(bitmap) { bitmap.asImageBitmap() }
@@ -190,16 +192,21 @@ fun BackgroundSettingsSection(
             }
             TextButton(onClick = onChoose, enabled = !state.busy) { Text("更换") }
             TextButton(onClick = onRemove, enabled = !state.busy) { Text("移除") }
+            }
         }
-        if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
+        if (state.busy) SettingPanel {
+            LinearProgressIndicator(Modifier.fillMaxWidth().padding(16.dp))
+        }
         if (state.hasImage) {
-            Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("模糊", style = MaterialTheme.typography.bodyLarge)
-                Slider(state.settings.blur, onBlurChanging, Modifier.weight(1f).testTag("background_blur"),
-                    enabled = editable, onValueChangeFinished = onBlurChanged)
-                Text("${(state.settings.blur * 100).roundToInt()}%", Modifier.widthIn(min = 40.dp), style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            SettingPanel {
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("模糊", style = MaterialTheme.typography.bodyLarge)
+                    Slider(state.settings.blur, onBlurChanging, Modifier.weight(1f).testTag("background_blur"),
+                        enabled = editable, onValueChangeFinished = onBlurChanged)
+                    Text("${(state.settings.blur * 100).roundToInt()}%", Modifier.widthIn(min = 40.dp), style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             SegmentRow("位置", listOf(BackgroundFocus.TOP to "偏上", BackgroundFocus.CENTER to "居中", BackgroundFocus.BOTTOM to "偏下"),
                 state.settings.focus, onFocusChanged, 200.dp, editable)
