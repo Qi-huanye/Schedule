@@ -13,7 +13,8 @@ data class Schedule(
     val createdAt: Long = System.currentTimeMillis(), val updatedAt: Long = System.currentTimeMillis(),
     val showWeekend: Boolean = true, val firstDay: Int = 1,
     val reminderMinutes: Int? = null,
-    val fixedLessonMinutes: Int? = null, val colorPalette: String = "custom"
+    val fixedLessonMinutes: Int? = null, val colorPalette: String = "custom",
+    val todoReminderMinutes: Int? = null
 )
 
 @Serializable
@@ -28,18 +29,21 @@ data class CoursePeriod(
     val id: Long = 0, val courseId: Long = 0, val dayOfWeek: Int = 1,
     val startSection: Int = 1, val endSection: Int = 2,
     val startWeek: Int = 1, val endWeek: Int = 16,
-    val weekType: WeekType = WeekType.ALL, val classroom: String = ""
+    val weekType: WeekType = WeekType.ALL, val classroom: String = "", val teacher: String = ""
 )
 
 @Serializable
 data class TimeSlot(val section: Int, val startTime: String, val endTime: String)
 
 @Serializable
+data class Todo(val id: Long = 0, val scheduleId: Long = 0, val title: String, val dueAt: Long, val courseId: Long? = null, val completed: Boolean = false)
+
+@Serializable
 data class CourseWithPeriods(val course: Course, val periods: List<CoursePeriod>)
 
 @Serializable
 data class ScheduleData(val schedule: Schedule, val courses: List<CourseWithPeriods> = emptyList(),
-    val timeSlots: List<TimeSlot> = defaultTimeSlots())
+    val timeSlots: List<TimeSlot> = defaultTimeSlots(), val todos: List<Todo> = emptyList())
 
 @Serializable
 data class Backup(val format: String = "WakeUpPure", val version: Int = 1,

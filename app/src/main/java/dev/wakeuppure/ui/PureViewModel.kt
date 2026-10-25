@@ -8,6 +8,8 @@ import dev.wakeuppure.data.local.ScheduleCache
 import dev.wakeuppure.data.local.PreparedTimetable
 import dev.wakeuppure.data.local.TimetableCache
 import dev.wakeuppure.data.repository.ScheduleRepository
+import dev.wakeuppure.widget.WidgetUpdater
+import dev.wakeuppure.data.repository.ThemePreferences
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.data.wakeup.json.WakeUpJsonImporter
 import dev.wakeuppure.data.wakeup.legacy.LegacyWakeUpImporter
@@ -74,6 +76,9 @@ class PureViewModel(
     private var pendingAppearance: String? = null
     private val prefs = application.getSharedPreferences("preferences", 0)
     val appearance = MutableStateFlow(prefs.getString("appearance", "system") ?: "system")
+    private val themePreferences = ThemePreferences(application)
+    private val mutableTheme = MutableStateFlow(themePreferences.read())
+    val themeSettings = mutableTheme.asStateFlow()
     val experimentalToken = MutableStateFlow(prefs.getBoolean("experimentalToken", false))
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; prettyPrint = true }
     private val shares = WakeUpShareRepository(WakeUpTokenImporter(AndroidDeviceIdentityProvider(application)))
@@ -89,6 +94,22 @@ class PureViewModel(
     }
 
     fun setAppearance(value: String) { appearance.value = value; prefs.edit().putString("appearance", value).apply() }
+    fun setSystemColors(enabled: Boolean) {
+        mutableTheme.update { it.copy(source = if (enabled) ThemeSource.SYSTEM else ThemeSource.PRESET) }
+        themePreferences.save(mutableTheme.value)
+    }
+    fun setThemePreset(id: String) {
+        mutableTheme.update { it.copy(source = ThemeSource.PRESET, preset = ThemePresets.find(id).id) }
+        themePreferences.save(mutableTheme.value)
+    }
+    fun setInterfaceScale(percent: Int) {
+        mutableTheme.update { it.copy(interfaceScalePercent = InterfaceSize.clamp(percent)) }
+        themePreferences.save(mutableTheme.value)
+    }
+    fun setShowNonCurrentWeekCourses(enabled: Boolean) {
+        mutableTheme.update { it.copy(showNonCurrentWeekCourses = enabled) }
+        themePreferences.save(mutableTheme.value)
+    }
     fun setExperimentalToken(value: Boolean) {
         experimentalToken.value = value
         prefs.edit().putBoolean("experimentalToken", value).apply()
@@ -98,7 +119,8 @@ class PureViewModel(
         busy.value = true
         try { writes.withLock { withContext(Dispatchers.IO) { block() } } }
         catch (e: CancellationException) { throw e }
-        catch (e: Exception) { error.value = if (e is IllegalArgumentException && e.message.orEmpty().startsWith("ICS 导入失败：")) e.message
+        catch (e: Exception) { error.value = if (e is IllegalArgumentException &&
+            listOf("ICS 导入失败：", "时光序导入失败：").any { e.message.orEmpty().startsWith(it) }) e.message
             else if (e is IllegalArgumentException) "数据不完整或超出允许范围，请检查日期、周次、节次和作息时间。" else "操作未完成，请重试。原有课表未被覆盖。" }
         finally { busy.value = false }
     } }
@@ -147,12 +169,23 @@ class PureViewModel(
         repository.saveCourse(course, periods, slots); withContext(Dispatchers.Main) { done() }
     }
     fun deleteCourse(id: Long) = action { repository.deleteCourse(id) }
+    fun saveTodo(todo: Todo, done: () -> Unit = {}) = action {
+        repository.saveTodo(todo)
+        WidgetUpdater.refresh(getApplication())
+        withContext(Dispatchers.Main) { done() }
+    }
+    fun toggleTodo(todo: Todo) = action {
+        repository.saveTodo(todo.copy(completed = !todo.completed))
+        WidgetUpdater.refresh(getApplication())
+    }
+    fun deleteTodo(id: Long) = action { repository.deleteTodo(id); WidgetUpdater.refresh(getApplication()) }
     fun select(id: Long) = action { repository.selectSchedule(id) }
     fun deleteSchedule(id: Long) = action { repository.deleteSchedule(id) }
     fun clearImport() { imported.value = null; pendingAppearance = null }
     fun parseImport(text: String) = action {
         imported.value = null
         pendingAppearance = null
+        require(text.toByteArray().size <= 5_000_000) { "文件过大，请选择小于 5 MB 的课表" }
         val trim = text.trim()
         val root = runCatching { json.parseToJsonElement(trim) as? JsonObject }.getOrNull()
         imported.value = if (root?.get("format")?.jsonPrimitive?.content == "WakeUpPure") {
@@ -161,6 +194,10 @@ class PureViewModel(
             pendingAppearance = backup.appearance.takeIf { it in listOf("system", "light", "dark") }
             backup.schedules
         } else listOf(shares.parseLocal(trim))
+    }
+    fun previewShiguangxu(data: List<ScheduleData>) {
+        pendingAppearance = null
+        imported.value = data
     }
     fun acceptImport(done: () -> Unit) = action {
         val data = requireNotNull(imported.value)

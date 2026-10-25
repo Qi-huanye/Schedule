@@ -40,6 +40,10 @@ class SettingsMigrationTest {
             assertEquals("Migration test",restored.name)
             assertEquals("2026-08-31",restored.semesterStartDate)
             assertNull(restored.fixedLessonMinutes)
+            assertNull(restored.todoReminderMinutes)
+            val repository = ScheduleRepository(room)
+            repository.saveTodo(dev.wakeuppure.domain.model.Todo(scheduleId = restored.id, title = "迁移后的待办", dueAt = 1))
+            assertEquals("迁移后的待办", repository.snapshot().single().todos.single().title)
             assertEquals("custom",restored.colorPalette)
         } finally { room.close(); context.deleteDatabase(file.name) }
     }

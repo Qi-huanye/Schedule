@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,6 +7,29 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
 }
+
+// Keep the in-app offline legal page complete when runtime dependencies change.
+val verifyOpenSourceCatalog = tasks.register("verifyOpenSourceCatalog") {
+    val catalogFile = layout.projectDirectory.file("src/main/assets/legal/catalog.json")
+    inputs.file(catalogFile)
+    doLast {
+        val catalog = JsonSlurper().parse(catalogFile.asFile) as Map<*, *>
+        val components = catalog["components"] as List<*>
+        val declared = components.map { (it as Map<*, *>)["id"].toString() }.toSet()
+        val resolved = listOf("debugRuntimeClasspath", "releaseRuntimeClasspath").flatMap { name ->
+            configurations.getByName(name).resolvedConfiguration.resolvedArtifacts
+                .map { "${it.moduleVersion.id.group}:${it.moduleVersion.id.name}:${it.moduleVersion.id.version}" }
+        }.toSet()
+        check(declared.containsAll(resolved)) { "Open-source catalog is missing: ${resolved - declared}. Update legal/catalog.json before shipping." }
+        val texts = catalog["texts"] as Map<*, *>
+        components.forEach { entry ->
+            ((entry as Map<*, *>)["licenses"] as List<*>).forEach { license ->
+                check(!texts[license].toString().isBlank() && texts[license] != null) { "License text missing: $license" }
+            }
+        }
+    }
+}
+tasks.named("preBuild") { dependsOn(verifyOpenSourceCatalog) }
 android {
     namespace = "dev.wakeuppure"
     compileSdk = 36
@@ -28,6 +53,9 @@ android {
     buildTypes {
         getByName("release") {
             isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             if (!signingPath.isNullOrBlank()) signingConfig = signingConfigs.getByName("distribution")
         }
     }
@@ -42,12 +70,13 @@ android {
 }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2025.04.01"))
+    implementation(platform("androidx.compose:compose-bom:2025.11.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
-    implementation("androidx.compose.material3:material3")
+    // Expressive public APIs (theme, motion, connected buttons, morphing shapes).
+    implementation("androidx.compose.material3:material3:1.5.0-alpha10")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.core:core-ktx:1.16.0")
@@ -61,6 +90,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation("androidx.exifinterface:exifinterface:1.4.1")
     implementation("com.materialkolor:material-color-utilities:2.0.2")
@@ -71,6 +101,6 @@ dependencies {
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2025.04.01"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2025.11.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }

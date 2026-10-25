@@ -46,7 +46,7 @@ class AppUpdateViewModelTest {
 
     private fun model(source: ReleaseSource = ReleaseSource { calls++; release },
         downloader: ApkDownloader = ApkDownloader { _, _ -> error("No download expected") }): AppUpdateViewModel =
-        AppUpdateViewModel(app, source, { now }, "0.2.0", downloader).also { store.put("model-${now}-${System.nanoTime()}", it) }
+        AppUpdateViewModel(app, source, { now }, "0.2.0", downloader, ioDispatcher = dispatcher).also { store.put("model-${now}-${System.nanoTime()}", it) }
 
     @Test fun downloadReportsProgressThenBecomesReady() = runTest(dispatcher) {
         val finished = CompletableDeferred<File>()
@@ -201,5 +201,16 @@ class AppUpdateViewModelTest {
         now -= day
         vm.checkForUpdates(); advanceUntilIdle()
         assertEquals(2, calls)
+    }
+
+    @Test fun dismissedReleaseCanBeOpenedAgainFromSettings() = runTest(dispatcher) {
+        val vm = model()
+        vm.checkForUpdates(manual = true); advanceUntilIdle()
+        vm.dismissUpdate()
+        assertNull(vm.state.value.release)
+        assertEquals(release, vm.state.value.availableRelease)
+        vm.showAvailableUpdate()
+        assertEquals(release, vm.state.value.release)
+        assertEquals(1, calls)
     }
 }

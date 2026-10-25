@@ -13,6 +13,7 @@ import dev.wakeuppure.data.update.ReleaseSource
 import dev.wakeuppure.data.update.isNewerVersion
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,6 +34,7 @@ data class AppUpdateState(
     val release: AppRelease? = null,
     val message: String? = null,
     val download: UpdateDownload = UpdateDownload.Idle,
+    val availableRelease: AppRelease? = null,
 )
 
 class AppUpdateViewModel(
@@ -41,6 +43,7 @@ class AppUpdateViewModel(
     private val now: () -> Long,
     private val currentVersion: String,
     downloader: ApkDownloader? = null,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AndroidViewModel(application) {
     constructor(application: Application) : this(application, null, System::currentTimeMillis, BuildConfig.VERSION_NAME)
 
@@ -56,7 +59,7 @@ class AppUpdateViewModel(
     private var cleanupJob: Job? = null
 
     private fun prepare() {
-        if (cleanupJob == null) cleanupJob = viewModelScope.launch(Dispatchers.IO) {
+        if (cleanupJob == null) cleanupJob = viewModelScope.launch(ioDispatcher) {
             runCatching { downloads.clean() }
         }
     }
@@ -74,11 +77,12 @@ class AppUpdateViewModel(
         mutableState.update { it.copy(checking = true, message = null) }
         checkJob = viewModelScope.launch {
             try {
-                val release = kotlinx.coroutines.withContext(Dispatchers.IO) { releases.latest() }
+                val release = kotlinx.coroutines.withContext(ioDispatcher) { releases.latest() }
                 val newer = release != null && isNewerVersion(release.version, currentVersion)
                 val skipped = release?.version?.substringBefore('+') == preferences.getString("skipped_version", null)
                 mutableState.update { state ->
                     state.copy(
+                        availableRelease = release.takeIf { newer },
                         release = release.takeIf { newer && (manual || (!skipped && state.autoCheckEnabled)) },
                         message = if (!manual || newer) null else if (release == null)
                             "暂未找到可用的正式版本" else "已是最新版本",
@@ -104,6 +108,10 @@ class AppUpdateViewModel(
     fun dismissUpdate() {
         downloadJob?.cancel()
         mutableState.update { it.copy(release = null, download = UpdateDownload.Idle) }
+    }
+
+    fun showAvailableUpdate() {
+        mutableState.update { it.copy(release = it.availableRelease, message = null) }
     }
 
     fun download() {

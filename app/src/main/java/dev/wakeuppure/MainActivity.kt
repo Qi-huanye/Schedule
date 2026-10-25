@@ -1,6 +1,8 @@
 package dev.wakeuppure
 
 import android.os.Bundle
+import android.animation.ValueAnimator
+import android.view.animation.PathInterpolator
 import android.os.Build
 import android.os.SystemClock
 import android.util.DisplayMetrics
@@ -43,9 +45,18 @@ class MainActivity : ComponentActivity() {
             SystemClock.uptimeMillis() - started < SPLASH_LIMIT_MS &&
                 !contentReady
         }
+        splash.setOnExitAnimationListener { provider ->
+            // No second splash or minimum delay. Respect the system's animator setting.
+            if (!ValueAnimator.areAnimatorsEnabled()) provider.remove()
+            else provider.view.animate().alpha(0f).scaleX(1.05f).scaleY(1.05f)
+                .setDuration(200L).setInterpolator(PathInterpolator(0.2f, 0f, 0f, 1f))
+                .withEndAction { provider.remove() }.start()
+        }
         setContent {
             dev.wakeuppure.ui.PureRoot(vm = scheduleModel, backgrounds = backgroundModel,
-                onContentReady = { contentReady = true })
+                onContentReady = { contentReady = true }, openToday = intent.getBooleanExtra("open_today", false),
+                initialTodoId = intent.getLongExtra("todo_id", 0).takeIf { it > 0 },
+                initialScheduleId = intent.getLongExtra("schedule_id", 0).takeIf { it > 0 })
         }
     }
 

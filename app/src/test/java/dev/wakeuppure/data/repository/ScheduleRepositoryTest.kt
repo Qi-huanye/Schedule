@@ -27,6 +27,50 @@ class ScheduleRepositoryTest {
     @After fun close() = db.close()
     private fun schedule(name: String = "Spring") = Schedule(name = name, semesterStartDate = "2026-09-07")
 
+    @Test fun todosPersistAndCourseLinksAreValidatedAndPreservedOnImport() = runBlocking {
+        val id = repository.saveSchedule(schedule(), defaultTimeSlots())
+        val courseId = repository.saveCourse(Course(scheduleId = id, name = "物理"), listOf(CoursePeriod()))
+        val todo = Todo(scheduleId = id, title = "交作业", dueAt = 1_766_000_000_000, courseId = courseId)
+        repository.saveTodo(todo)
+        val saved = repository.snapshot().single().todos.single()
+        assertEquals(courseId, saved.courseId)
+        assertEquals("交作业", saved.title)
+        repository.saveTodo(saved.copy(completed = true))
+        val completed = repository.snapshot().single().todos.single()
+        assertTrue(completed.completed)
+        val importedId = repository.importSchedules(repository.snapshot()).single()
+        val imported = repository.snapshot().first { it.schedule.id == importedId }
+        assertEquals("交作业", imported.todos.single().title)
+        assertEquals(imported.courses.single().course.id, imported.todos.single().courseId)
+    }
+
+    @Test fun deletingCourseKeepsTodoAndDeletingScheduleRemovesIt() = runBlocking {
+        val id = repository.saveSchedule(schedule().copy(todoReminderMinutes = 15), defaultTimeSlots())
+        val courseId = repository.saveCourse(Course(scheduleId = id, name = "课程"), listOf(CoursePeriod()))
+        val todoId = repository.saveTodo(Todo(scheduleId = id, title = "作业", dueAt = 1_766_000_000_000, courseId = courseId))
+        repository.deleteCourse(courseId)
+        val restored = repository.snapshot().single()
+        assertNull(restored.todos.single().courseId)
+        assertEquals(15, restored.schedule.todoReminderMinutes)
+        repository.saveTodo(restored.todos.single().copy(title = "修改后的作业"))
+        assertEquals("修改后的作业", repository.snapshot().single().todos.single().title)
+        repository.deleteTodo(todoId)
+        assertTrue(repository.snapshot().single().todos.isEmpty())
+        repository.saveTodo(Todo(scheduleId = id, title = "作业", dueAt = 1_766_000_000_000))
+        repository.deleteSchedule(id)
+        assertNull(db.scheduleDao().todo(todoId + 1))
+    }
+
+    @Test fun invalidTodoLinksCannotCrossSchedulesOrMoveExistingTodos() = runBlocking {
+        val first = repository.saveSchedule(schedule(), defaultTimeSlots())
+        val second = repository.saveSchedule(schedule("Other"), defaultTimeSlots())
+        val course = repository.saveCourse(Course(scheduleId = first, name = "Course"), listOf(CoursePeriod()))
+        assertTrue(runCatching { repository.saveTodo(Todo(scheduleId = second, title = "Wrong", dueAt = 1, courseId = course)) }.isFailure)
+        val id = repository.saveTodo(Todo(scheduleId = first, title = "Original", dueAt = 1))
+        assertTrue(runCatching { repository.saveTodo(Todo(id = id, scheduleId = second, title = "Moved", dueAt = 1)) }.isFailure)
+        assertEquals("Original", repository.snapshot().first { it.schedule.id == first }.todos.single().title)
+    }
+
     @Test fun courseCanExtendEightSlotScheduleAtomically() = runBlocking {
         val id = repository.saveSchedule(schedule(), defaultTimeSlots().take(8))
         repository.saveCourse(Course(scheduleId = id, name = "Evening"),

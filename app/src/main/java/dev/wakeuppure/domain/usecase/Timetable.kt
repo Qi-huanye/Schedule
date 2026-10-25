@@ -3,6 +3,8 @@ package dev.wakeuppure.domain.usecase
 import dev.wakeuppure.domain.model.*
 import java.time.*
 import java.time.temporal.ChronoUnit
+import java.util.PriorityQueue
+import java.util.TreeSet
 
 object WeekCalculator {
     fun monday(start: String): LocalDate = LocalDate.parse(start).with(DayOfWeek.MONDAY)
@@ -15,6 +17,7 @@ object WeekCalculator {
 data class Occurrence(val course: Course, val period: CoursePeriod,
     val date: LocalDate, val start: LocalDateTime, val end: LocalDateTime) {
     val classroom: String get() = period.classroom.ifBlank { course.classroom }
+    val teacher: String get() = period.teacher.ifBlank { course.teacher }
 }
 
 object CourseFilter {
@@ -33,13 +36,27 @@ object CourseFilter {
     }
 
     fun next(data: ScheduleData, now: LocalDateTime): Occurrence? {
-        val end = WeekCalculator.date(data.schedule.semesterStartDate, data.schedule.maxWeeks, 7)
-        var day = maxOf(now.toLocalDate(), WeekCalculator.monday(data.schedule.semesterStartDate))
-        while (!day.isAfter(end)) {
-            onDate(data, day).firstOrNull { it.start.isAfter(now) }?.let { return it }
-            day = day.plusDays(1)
+        val monday = WeekCalculator.monday(data.schedule.semesterStartDate)
+        val currentWeek = WeekCalculator.week(data.schedule.semesterStartDate, now.toLocalDate())
+        val slots = data.timeSlots.associateBy { it.section }
+        var best: Occurrence? = null
+        for (course in data.courses) for (period in course.periods) {
+            val start = slots[period.startSection]?.startTime?.let(LocalTime::parse) ?: continue
+            val end = slots[period.endSection]?.endTime?.let(LocalTime::parse) ?: continue
+            var week = maxOf(1, currentWeek, period.startWeek)
+            val lastWeek = minOf(period.endWeek, data.schedule.maxWeeks)
+            if (week > lastWeek) continue
+            var date = monday.plusWeeks((week - 1).toLong()).plusDays((period.dayOfWeek - 1).toLong())
+            if (!date.atTime(start).isAfter(now)) week++
+            if (period.weekType != WeekType.ALL && !matches(period, week)) week++
+            if (week > lastWeek) continue
+            date = monday.plusWeeks((week - 1).toLong()).plusDays((period.dayOfWeek - 1).toLong())
+            val candidate = Occurrence(course.course, period, date, date.atTime(start), date.atTime(end))
+            val previous = best
+            if (previous == null || candidate.start < previous.start ||
+                (candidate.start == previous.start && candidate.course.name < previous.course.name)) best = candidate
         }
-        return null
+        return best
     }
 
     // Partition each connected interval cluster; adjacent non-overlapping sections reset widths.
@@ -48,13 +65,20 @@ object CourseFilter {
         periods.groupBy { it.dayOfWeek }.values.forEach { day ->
             val cluster = mutableListOf<CoursePeriod>()
             fun flush() {
-                val ends = mutableListOf<Int>()
+                val active = PriorityQueue(compareBy<Pair<Int, Int>>({ it.first }, { it.second }))
+                val free = TreeSet<Int>()
+                var laneCount = 0
                 val assigned = cluster.map { p ->
-                    var lane = ends.indexOfFirst { it < p.startSection }
-                    if (lane < 0) { lane = ends.size; ends.add(p.endSection) } else ends[lane] = p.endSection
+                    while (true) {
+                        val earliest = active.peek() ?: break
+                        if (earliest.first >= p.startSection) break
+                        free.add(active.remove().second)
+                    }
+                    val lane = if (free.isEmpty()) laneCount++ else free.pollFirst()
+                    active.add(p.endSection to lane)
                     p.id to lane
                 }
-                assigned.forEach { (id, lane) -> result[id] = lane to ends.size }
+                assigned.forEach { (id, lane) -> result[id] = lane to laneCount }
                 cluster.clear()
             }
             var end = 0

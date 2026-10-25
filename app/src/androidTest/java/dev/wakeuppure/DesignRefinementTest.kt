@@ -1,0 +1,230 @@
+package dev.wakeuppure
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import dev.wakeuppure.data.local.TimetableCache
+import dev.wakeuppure.domain.model.*
+import dev.wakeuppure.ui.PureTheme
+import dev.wakeuppure.ui.background.imageColorScheme
+import dev.wakeuppure.ui.settings.*
+import dev.wakeuppure.ui.timetable.WeekPager
+import dev.wakeuppure.ui.update.*
+import dev.wakeuppure.data.update.AppRelease
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.time.LocalDateTime
+
+@RunWith(AndroidJUnit4::class)
+class DesignRefinementTest {
+    @get:Rule val compose = createComposeRule()
+
+    @Test fun denseStartupPreparesOnlyTheVisibleWeekBeforeShowingContent() {
+        val now = LocalDateTime.of(2026, 10, 19, 8, 0)
+        val data = ScheduleData(Schedule(id = 997, name = "密集启动", semesterStartDate = "2026-10-12", maxWeeks = 60),
+            List(200) { i -> CourseWithPeriods(Course(id = i + 1L, name = "课程 $i"),
+                List(20) { j -> CoursePeriod(id = i * 20L + j + 1, dayOfWeek = i % 7 + 1,
+                    startSection = i % 6 * 2 + 1, endSection = i % 6 * 2 + 2,
+                    startWeek = j + 3, endWeek = j + 3) }) })
+        val timetable = runBlocking { TimetableCache(ApplicationProvider.getApplicationContext()).prepare(data, now.toLocalDate()) }
+        assertNotNull(timetable.cached(2))
+        assertNull(timetable.cached(1))
+        assertNull(timetable.cached(3))
+        compose.setContent { PureTheme("light") {
+            val pager = rememberPagerState(initialPage = 1, pageCount = { 60 })
+            WeekPager(timetable, pager, now, {}, {})
+        } }
+        compose.onNodeWithTag("week_pager").assertIsDisplayed()
+        compose.onNodeWithTag("week_pager").performTouchInput { swipeLeft(durationMillis = 220) }
+        compose.waitForIdle()
+        compose.onNodeWithTag("week_pager").assertIsDisplayed()
+    }
+
+    @Test fun nonCurrentWeekCoursesCanBeHiddenAndRestoredWithoutReloadingTheTimetable() {
+        val now = LocalDateTime.of(2026, 10, 19, 8, 0)
+        val data = ScheduleData(Schedule(id = 998, name = "显示设置", semesterStartDate = "2026-10-19"), listOf(
+            CourseWithPeriods(Course(id = 1, name = "本周课程"), listOf(CoursePeriod(id = 1, dayOfWeek = 1))),
+            CourseWithPeriods(Course(id = 2, name = "隔周课程"), listOf(CoursePeriod(id = 2, dayOfWeek = 2, startWeek = 2, endWeek = 2))),
+        ))
+        val timetable = runBlocking { TimetableCache(ApplicationProvider.getApplicationContext()).prepare(data, now.toLocalDate()) }
+        var showOthers by mutableStateOf(true)
+        compose.setContent { PureTheme("light") {
+            val pager = rememberPagerState(pageCount = { 20 })
+            WeekPager(timetable, pager, now, {}, {}, showNonCurrentWeekCourses = showOthers)
+        } }
+        compose.onAllNodesWithText("本周课程").onFirst().assertExists()
+        compose.onNodeWithContentDescription("隔周课程，1至2节，非本周").assertExists()
+        compose.runOnIdle { showOthers = false }
+        compose.onNodeWithContentDescription("隔周课程，1至2节，非本周").assertDoesNotExist()
+        compose.onAllNodesWithText("本周课程").onFirst().assertExists()
+        compose.runOnIdle { showOthers = true }
+        compose.onNodeWithContentDescription("隔周课程，1至2节，非本周").assertExists()
+    }
+
+    @Test fun denseWeekSwipesSettleAtNarrowWidthAndLargeFont() {
+        val now = LocalDateTime.of(2026, 10, 19, 8, 0)
+        val data = ScheduleData(Schedule(name = "滑动回归", semesterStartDate = "2026-10-19"),
+            (0 until 56).map { i -> CourseWithPeriods(Course(id = i + 1L, name = "课程 $i"),
+                listOf(CoursePeriod(id = i + 1L, dayOfWeek = i % 7 + 1, startSection = (i / 7) % 8 + 1, endSection = ((i / 7) % 8 + 2).coerceAtMost(12)))) })
+        val timetable = runBlocking { TimetableCache(ApplicationProvider.getApplicationContext()).prepare(data, now.toLocalDate()) }
+        lateinit var pager: PagerState
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                PureTheme("light") {
+                    pager = rememberPagerState(initialPage = 0, pageCount = { 20 })
+                    Box(Modifier.width(320.dp).fillMaxHeight()) { WeekPager(timetable, pager, now, {}, {}, Modifier.fillMaxSize()) }
+                }
+            }
+        }
+        repeat(4) { index ->
+            compose.onNodeWithTag("week_pager").performTouchInput { swipeLeft(durationMillis = 220) }
+            compose.runOnIdle {
+                assertEquals(index + 1, pager.settledPage)
+                assertFalse(pager.isScrollInProgress)
+                assertEquals(0f, pager.currentPageOffsetFraction, 0.001f)
+            }
+        }
+        repeat(4) { index ->
+            compose.onNodeWithTag("week_pager").performTouchInput { swipeRight(durationMillis = 220) }
+            compose.runOnIdle {
+                assertEquals(3 - index, pager.settledPage)
+                assertEquals(0f, pager.currentPageOffsetFraction, 0.001f)
+            }
+        }
+        // A deliberate small drag returns fully to the current page, rather than staying halfway.
+        compose.onNodeWithTag("week_pager").performTouchInput {
+            swipe(Offset(width * .6f, height * .4f), Offset(width * .45f, height * .4f), durationMillis = 1000)
+        }
+        compose.runOnIdle { assertEquals(0, pager.settledPage); assertEquals(0f, pager.currentPageOffsetFraction, 0.001f) }
+    }
+
+    @Test fun timeDialogHasContextAndSwitchesInputWithoutLosingTime() {
+        var selected = ""
+        var visible by mutableStateOf(true)
+        compose.setContent { PureTheme("light") { if (visible) LessonTimeDialog("08:45", "第 1 节开始时间", { visible = false }) { selected = it; visible = false } } }
+        compose.onNodeWithText("选择时间").assertIsDisplayed()
+        compose.onNodeWithText("第 1 节开始时间").assertIsDisplayed()
+        compose.onNodeWithContentDescription("切换为键盘输入").performClick()
+        compose.onNodeWithText("输入时间").assertIsDisplayed()
+        val fields = compose.onAllNodes(hasSetTextAction())
+        fields[0].performTextReplacement("09")
+        fields[1].performTextReplacement("30")
+        compose.onNodeWithText("确定").performClick()
+        compose.runOnIdle { assertEquals("09:30", selected) }
+    }
+
+    @Test fun deletingCoursesNeverMixesOldLayoutIndicesWithANewSnapshot() {
+        val now = LocalDateTime.of(2026, 10, 19, 8, 0)
+        val data = ScheduleData(Schedule(id = 999, name = "快照切换", semesterStartDate = "2026-10-19"),
+            listOf(CourseWithPeriods(Course(id = 1, name = "将删除的课程"), listOf(CoursePeriod(id = 1)))))
+        val cache = TimetableCache(ApplicationProvider.getApplicationContext())
+        val full = runBlocking { cache.prepare(data, now.toLocalDate()) }
+        val empty = runBlocking { cache.prepare(data.copy(courses = emptyList()), now.toLocalDate()) }
+        var timetable by mutableStateOf(full)
+        compose.setContent { PureTheme("light") {
+            val pager = rememberPagerState(pageCount = { 20 })
+            WeekPager(timetable, pager, now, {}, {}, Modifier.fillMaxSize())
+        } }
+        compose.onAllNodesWithText("将删除的课程").onFirst().assertExists()
+        compose.runOnIdle { timetable = empty }
+        compose.onAllNodesWithText("将删除的课程").assertCountEquals(0)
+    }
+
+    @Test fun presetSheetShowsTheLastOptionFullyWithoutAnExtraDrag() {
+        var selected = ""
+        compose.setContent { PureTheme("light") { ThemePresetSheet(ThemeSettings(), {}, { selected = it }) } }
+        val option = compose.onNode(hasText("新叶") and hasClickAction())
+        option.assertIsDisplayed()
+        val full = option.getUnclippedBoundsInRoot()
+        val visible = option.getBoundsInRoot()
+        assertEquals("The last option must be fully visible", (full.bottom - full.top).value, (visible.bottom - visible.top).value, 0.5f)
+        option.performClick()
+        compose.runOnIdle { assertEquals("green", selected) }
+    }
+
+    @Test fun coursePaletteUsesSelectableCardsAndWaitsForConfirmation() {
+        var confirmed = ""
+        compose.setContent { PureTheme("light") {
+            PaletteSheet("soft", false, emptyList(), listOf(0xFF176B60.toInt()), {}, { confirmed = it })
+        } }
+        compose.onNode(hasText("柔和缤纷") and isSelectable()).assertIsSelected()
+        compose.onNode(hasText("跟随背景") and isSelectable()).performClick().assertIsSelected()
+        compose.runOnIdle { assertEquals("", confirmed) }
+        compose.onNodeWithText("保留现有颜色").assertDoesNotExist()
+        compose.onNodeWithText("当前课程颜色").assertDoesNotExist()
+        val last = compose.onNode(hasText("暖日桃橙") and isSelectable())
+        last.assertIsDisplayed()
+        val full = last.getUnclippedBoundsInRoot()
+        val visible = last.getBoundsInRoot()
+        assertEquals((full.bottom - full.top).value, (visible.bottom - visible.top).value, 0.5f)
+        compose.onNodeWithText("确定").performClick()
+        compose.runOnIdle { assertEquals(FOLLOW_BACKGROUND, confirmed) }
+    }
+
+    @Test fun coursePaletteCanScrollToTheLastChoiceWithLargeText() {
+        var confirmed = ""
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                PureTheme("light") {
+                    PaletteSheet("custom", false, listOf(androidx.compose.ui.graphics.Color.Red), null, {}, { confirmed = it })
+                }
+            }
+        }
+        compose.onNodeWithText("跟随背景").assertDoesNotExist()
+        compose.onNode(hasText("暖日桃橙") and isSelectable()).performScrollTo().performClick().assertIsSelected()
+        compose.onNodeWithText("确定").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals("sunset", confirmed) }
+    }
+
+    @Test fun customCourseColorsCanBeRestoredFromTheBackgroundWithoutOfferingAReset() {
+        var confirmed = ""
+        compose.setContent { PureTheme("light") {
+            PaletteSheet("custom", true, listOf(androidx.compose.ui.graphics.Color.Red), listOf(0xFF176B60.toInt()), {}, { confirmed = it })
+        } }
+        compose.onNode(hasText("跟随背景") and isSelectable()).assertIsSelected()
+        compose.onNodeWithText("保留现有颜色").assertDoesNotExist()
+        compose.onNode(hasText("当前课程颜色") and isSelectable()).performClick().assertIsSelected()
+        compose.onNodeWithText("确定").performClick()
+        compose.runOnIdle { assertEquals("custom", confirmed) }
+    }
+
+    @Test fun presetThemeIsUsedWithoutSystemColors() {
+        var primary = androidx.compose.ui.graphics.Color.Unspecified
+        compose.setContent { PureTheme("light", theme = ThemeSettings(ThemeSource.PRESET, "rose")) {
+            val color = androidx.compose.material3.MaterialTheme.colorScheme.primary
+            SideEffect { primary = color }
+        } }
+        compose.runOnIdle { assertEquals(imageColorScheme(ThemePresets.find("rose").seed, false).primary, primary) }
+    }
+
+    @Test fun availableUpdateRemainsActionableInTheStatusCard() {
+        var opened = false
+        val release = AppRelease("9.0.0", "更新说明", "https://github.com/Qi-huanye/Schedule/releases/tag/v9.0.0")
+        compose.setContent { PureTheme("light") { Column { AppUpdateSettings(AppUpdateState(availableRelease = release), {}, {}, { opened = true }) } } }
+        compose.onNodeWithText("发现新版本 9.0.0").assertIsDisplayed()
+        compose.onNodeWithText("查看更新").performClick()
+        compose.runOnIdle { assertTrue(opened) }
+    }
+
+    @Test fun licensesAreSearchableAndFullTextIsAvailableOffline() {
+        compose.setContent { PureTheme("light") { LicensesScreen {} } }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("查找开源组件").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("查找开源组件").performTextInput("materialkolor")
+        compose.onNodeWithText("com.materialkolor:material-color-utilities-android:2.0.2").performClick()
+        compose.onNodeWithText("Copyright (c) 2023 Jordon de Hoog", substring = true).assertExists()
+    }
+}

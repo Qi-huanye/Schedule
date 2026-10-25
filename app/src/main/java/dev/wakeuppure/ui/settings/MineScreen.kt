@@ -8,13 +8,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.wakeuppure.domain.model.*
@@ -28,67 +27,102 @@ import java.time.LocalDate
 /** 我的: the only settings page — current timetable, appearance, data and about. */
 @Composable
 fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backgrounds: BackgroundViewModel,
-    updates: AppUpdateViewModel, onChooseImage: () -> Unit, onTimes: () -> Unit, onTransfer: () -> Unit, onNewSchedule: () -> Unit) {
+    updates: AppUpdateViewModel, onChooseImage: () -> Unit, onTimes: () -> Unit, onTransfer: () -> Unit, onNewSchedule: () -> Unit,
+    onAbout: () -> Unit) {
     val background by backgrounds.state.collectAsState()
     val updateState by updates.state.collectAsState()
     val busy by vm.busy.collectAsState()
+    val theme by vm.themeSettings.collectAsState()
     var sheet by remember { mutableStateOf<String?>(null) }
-    var pendingReminder by remember { mutableStateOf<Int?>(null) }
+    var pendingReminder by remember { mutableStateOf<Pair<Int?, Int?>?>(null) }
     // Each quick change applies only its own field to the latest stored schedule, so rapid changes never overwrite each other.
     fun update(change: (Schedule) -> Schedule) { data?.let { vm.updateSchedule(it.schedule.id, change) } }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        val minutes = pendingReminder
-        if (granted) update { it.copy(reminderMinutes = minutes) } else vm.error.value = "通知权限未开启"
+        val choice = pendingReminder
+        if (granted && choice != null) update { it.copy(reminderMinutes = choice.first, todoReminderMinutes = choice.second) }
+        else if (!granted) vm.error.value = "通知权限未开启"
+        pendingReminder = null
     }
-    fun setReminder(minutes: Int?) {
+    fun setReminder(courseMinutes: Int?, todoMinutes: Int?) {
         if (data == null) return
-        if (minutes != null && Build.VERSION.SDK_INT >= 33) { pendingReminder = minutes; permission.launch(Manifest.permission.POST_NOTIFICATIONS) }
-        else update { it.copy(reminderMinutes = minutes) }
+        if ((courseMinutes != null || todoMinutes != null) && Build.VERSION.SDK_INT >= 33) {
+            pendingReminder = courseMinutes to todoMinutes
+            permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else update { it.copy(reminderMinutes = courseMinutes, todoReminderMinutes = todoMinutes) }
     }
     val followsBackground = background.hasImage && background.settings.courseTheme
-    // Over a photo the rounded panel stays fixed and its content scrolls inside it, so the panel
-    // edge is never sliced off under the status bar.
-    val panelShape = if (LocalBackgroundActive.current) RoundedCornerShape(20.dp) else RectangleShape
-    Column(Modifier.fillMaxSize().padding(if (LocalBackgroundActive.current) 12.dp else 0.dp)
-        .clip(panelShape).background(backgroundPanelColor())
+    // The photo remains visible between independent setting cards, as on Today.
+    Column(Modifier.fillMaxSize()
         .verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
-        Text("我的", Modifier.padding(start = 16.dp, top = 16.dp), style = MaterialTheme.typography.headlineSmall)
+        PageHeading("我的", "让课表更合你的习惯") { ScheduleMark(Modifier.size(48.dp)) }
         if (data != null) {
             val s = data.schedule
-            GroupTitle("当前课表 · ${s.name}")
-            SettingRow("名称", s.name) { sheet = "name" }
-            val start = runCatching { LocalDate.parse(s.semesterStartDate) }.getOrNull()
-            SettingRow("学期", listOfNotNull(start?.let { "${it.monthValue}月${it.dayOfMonth}日开学" }, "${s.maxWeeks} 周").joinToString(" · ")) { sheet = "term" }
-            SettingRow("作息时间", "每天 ${data.timeSlots.size} 节", onClick = onTimes)
-            SwitchRow("显示周末", s.showWeekend, { value -> update { it.copy(showWeekend = value) } })
-            SegmentRow("每周第一天", listOf(1 to "周一", 7 to "周日"), s.firstDay, { value -> update { it.copy(firstDay = value) } }, 132.dp)
-            SettingRow("课程配色", if (followsBackground) "跟随背景" else null,
-                trailing = { if (!followsBackground) Swatches(paletteColors(data).take(4).map(::hexColor)) }) { sheet = "palette" }
-            SettingRow("课前提醒", s.reminderMinutes?.let { "提前 $it 分钟" } ?: "关闭") { sheet = "reminder" }
-            SettingRow("新建课表", onClick = onNewSchedule)
-            SettingRow("删除此课表", titleColor = MaterialTheme.colorScheme.error, chevron = false, onClick = { sheet = "delete" })
+            SettingsSection("当前课表") {
+                SettingRow("名称", s.name, leadingIcon = Icons.Default.Edit) { sheet = "name" }
+                val start = runCatching { LocalDate.parse(s.semesterStartDate) }.getOrNull()
+                SettingRow("学期", listOfNotNull(start?.let { "${it.monthValue}月${it.dayOfMonth}日开学" }, "共 ${s.maxWeeks} 周").joinToString("，"),
+                    leadingIcon = Icons.Default.CalendarMonth) { sheet = "term" }
+                SettingRow("作息时间", "每天 ${data.timeSlots.size} 节", leadingIcon = Icons.Default.Schedule, onClick = onTimes)
+                SwitchRow("显示周末", s.showWeekend, { value -> update { it.copy(showWeekend = value) } }, leadingIcon = Icons.Default.DateRange)
+                SegmentRow("每周第一天", listOf(1 to "周一", 7 to "周日"), s.firstDay, { value -> update { it.copy(firstDay = value) } }, 132.dp)
+                SettingRow("课程配色", if (followsBackground) "跟随背景" else null,
+                    trailing = { if (!followsBackground) Swatches(paletteColors(data).take(4).map(::hexColor)) }, leadingIcon = Icons.Default.Palette) { sheet = "palette" }
+                SettingRow("提醒", when {
+                    s.reminderMinutes != null && s.todoReminderMinutes != null -> "课程与待办"
+                    s.reminderMinutes != null -> "课程提醒"
+                    s.todoReminderMinutes != null -> "待办提醒"
+                    else -> "关闭"
+                }, leadingIcon = Icons.Default.Notifications) { sheet = "reminder" }
+                SettingRow("新建课表", leadingIcon = Icons.Default.Add, onClick = onNewSchedule)
+                SettingRow("删除此课表", titleColor = MaterialTheme.colorScheme.error, chevron = false,
+                    leadingIcon = Icons.Default.Delete, onClick = { sheet = "delete" })
+            }
         } else {
-            GroupTitle("课表")
-            SettingRow("新建课表", onClick = onNewSchedule)
-            SettingRow("导入课表", onClick = onTransfer)
+            SettingsSection("课表") {
+                SettingRow("新建课表", leadingIcon = Icons.Default.Add, onClick = onNewSchedule)
+                SettingRow("导入课表", leadingIcon = Icons.Default.FileOpen, onClick = onTransfer)
+            }
         }
-        GroupTitle("外观")
-        SegmentRow("主题", listOf("system" to "系统", "light" to "浅色", "dark" to "深色"), appearance, vm::setAppearance, 200.dp)
-        BackgroundSettingsSection(background, onChooseImage, backgrounds::clearBackground, backgrounds::setImageTheme,
-            backgrounds::previewBlur, backgrounds::commitBlur, backgrounds::setFocus)
-        GroupTitle("数据")
-        SettingRow("导入与导出", onClick = onTransfer)
-        GroupTitle("关于")
-        AppUpdateSettings(updateState, updates::setAutoCheckEnabled) { updates.checkForUpdates(manual = true) }
-        SettingRow("开源许可与隐私") { sheet = "licenses" }
+        SettingsSection("外观") {
+            SwitchRow("显示非本周课程", theme.showNonCurrentWeekCourses, vm::setShowNonCurrentWeekCourses,
+                subtitle = "对所有课表生效", leadingIcon = Icons.Default.Visibility)
+            SegmentRow("外观模式", listOf("system" to "系统", "light" to "浅色", "dark" to "深色"), appearance, vm::setAppearance, 200.dp)
+            SettingRow("界面大小", if (theme.interfaceScalePercent == InterfaceSize.DEFAULT_PERCENT) "跟随系统" else "${theme.interfaceScalePercent}%",
+                leadingIcon = Icons.Default.Tune) { sheet = "size" }
+            val imageTheme = background.hasImage && background.settings.imageTheme
+            SwitchRow("系统动态取色", !imageTheme && theme.source == ThemeSource.SYSTEM && Build.VERSION.SDK_INT >= 31,
+                vm::setSystemColors, enabled = !imageTheme && Build.VERSION.SDK_INT >= 31,
+                leadingIcon = Icons.Default.AutoAwesome,
+                subtitle = when {
+                    imageTheme -> "正在使用背景图片取色，关闭“主题跟随背景”后可更改"
+                    Build.VERSION.SDK_INT < 31 -> "Android 12 及以上可用，当前使用预设主题色"
+                    else -> "从系统壁纸生成应用配色"
+                })
+            SettingRow("预设主题色", when {
+                imageTheme -> "关闭背景取色后可选择"
+                theme.source == ThemeSource.SYSTEM && Build.VERSION.SDK_INT >= 31 -> "选择预设可替代系统配色"
+                else -> ThemePresets.find(theme.preset).name
+            }, leadingIcon = Icons.Default.ColorLens,
+                onClick = if (imageTheme) null else ({ sheet = "theme" }))
+            BackgroundSettingsSection(background, onChooseImage, backgrounds::clearBackground, backgrounds::setImageTheme,
+                backgrounds::previewBlur, backgrounds::commitBlur, backgrounds::setFocus)
+        }
+        SettingsSection("数据") {
+            SettingRow("导入与导出", leadingIcon = Icons.Default.SwapVert, onClick = onTransfer)
+        }
+        SettingsSection("关于") {
+            AppUpdateSettings(updateState, updates::setAutoCheckEnabled, { updates.checkForUpdates(manual = true) }, updates::showAvailableUpdate)
+            SettingRow("关于 Schedule", "源代码、开源许可与隐私", leadingIcon = Icons.Default.Info, onClick = onAbout)
+        }
     }
     val close = { sheet = null }
     when (sheet) {
-        "licenses" -> LicensesDialog(close)
+        "size" -> InterfaceSizeSheet(theme.interfaceScalePercent, data?.schedule?.showWeekend != false, close) { vm.setInterfaceScale(it); close() }
+        "theme" -> ThemePresetSheet(theme, close) { vm.setThemePreset(it); close() }
         else -> if (data != null) when (sheet) {
             "name" -> RenameDialog(data.schedule.name, close) { name -> update { it.copy(name = name) }; close() }
             "term" -> TermSheet(data, busy, close) { schedule, preserve, offset -> vm.saveSchedule(schedule, data.timeSlots, preserve, offset) { close() } }
-            "palette" -> PaletteSheet(if (followsBackground) FOLLOW_BACKGROUND else data.schedule.colorPalette,
+            "palette" -> PaletteSheet(data.schedule.colorPalette, followsBackground, data.courses.map { hexColor(it.course.color) },
                 background.colors?.lightCourses?.takeIf { background.hasImage }, close) { choice ->
                 close()
                 if (choice == FOLLOW_BACKGROUND) backgrounds.setCourseTheme(true)
@@ -97,9 +131,9 @@ fun MineScreen(vm: PureViewModel, data: ScheduleData?, appearance: String, backg
                     if (choice != data.schedule.colorPalette) update { it.copy(colorPalette = choice) }
                 }
             }
-            "reminder" -> ReminderSheet(data.schedule.reminderMinutes, close) { close(); setReminder(it) }
+            "reminder" -> ReminderSheet(data.schedule.reminderMinutes, data.schedule.todoReminderMinutes, close) { course, todo -> close(); setReminder(course, todo) }
             "delete" -> AlertDialog(onDismissRequest = close, title = { Text("删除 ${data.schedule.name}？") },
-                text = { Text("该课表及其所有课程将被删除。") },
+                text = { Text("该课表及其所有课程和待办将被删除。") },
                 confirmButton = { TextButton(onClick = { close(); vm.deleteSchedule(data.schedule.id) }) { Text("删除") } },
                 dismissButton = { TextButton(onClick = close) { Text("取消") } })
         }

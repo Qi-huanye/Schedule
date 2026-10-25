@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package dev.wakeuppure.ui.timetable
 
 import androidx.compose.foundation.clickable
@@ -23,6 +25,7 @@ internal fun WeekSchedulePanel(data: ScheduleData, all: List<ScheduleData>, week
     onWeek: (Int) -> Unit, onSelect: (Long) -> Unit, onNewSchedule: () -> Unit, onImport: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
+            SheetTitle("周次与课表")
             SheetLabel("周次")
             SelectGrid((1..data.schedule.maxWeeks).toList(), 5, { if (it == week) CellState.EDGE else CellState.NONE }, onWeek,
                 marked = { it == current }, describe = { if (it == current) "第 $it 周（本周）" else "第 $it 周" })
@@ -37,10 +40,10 @@ internal fun WeekSchedulePanel(data: ScheduleData, all: List<ScheduleData>, week
                     modifier = Modifier.then(if (item.schedule.id != data.schedule.id) Modifier.clickable { onSelect(item.schedule.id) } else Modifier))
             }
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = onNewSchedule, modifier = Modifier.weight(1f)) {
+                FilledTonalButton(shapes = ButtonDefaults.shapes(), onClick = onNewSchedule, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Default.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("新建")
                 }
-                FilledTonalButton(onClick = onImport, modifier = Modifier.weight(1f)) {
+                FilledTonalButton(shapes = ButtonDefaults.shapes(), onClick = onImport, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Default.FolderOpen, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("导入")
                 }
             }

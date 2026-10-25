@@ -23,6 +23,10 @@ interface ScheduleDao {
     @Update suspend fun updatePeriods(values: List<CoursePeriodEntity>)
     @Insert suspend fun insertPeriods(values: List<CoursePeriodEntity>)
     @Insert suspend fun insertSlots(values: List<TimeSlotEntity>)
+    @Insert suspend fun insertTodo(value: TodoEntity): Long
+    @Update suspend fun updateTodo(value: TodoEntity)
+    @Query("SELECT * FROM todos WHERE id = :id") suspend fun todo(id: Long): TodoEntity?
+    @Query("DELETE FROM todos WHERE id = :id") suspend fun deleteTodo(id: Long)
     @Query("UPDATE schedules SET current = 0") suspend fun clearCurrent()
     @Query("UPDATE schedules SET current = 1 WHERE id = :id") suspend fun markCurrent(id: Long)
     @Query("DELETE FROM schedules WHERE id = :id") suspend fun deleteSchedule(id: Long)

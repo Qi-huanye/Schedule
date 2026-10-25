@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package dev.wakeuppure.ui.course
 
 import androidx.compose.foundation.*
@@ -15,6 +17,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.draw.clip
 import dev.wakeuppure.domain.model.*
 import dev.wakeuppure.ui.background.backgroundPanelColor
 import dev.wakeuppure.ui.background.backgroundScreenColor
@@ -38,9 +45,10 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
         invalid = course.name.isBlank()
         if (!invalid) onSave(course, periods.toList(), slots)
     }
-    Scaffold(containerColor = backgroundScreenColor(), topBar = { TopAppBar(title = { Text(if (initial == null) "添加课程" else "编辑课程") },
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    Scaffold(modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection), containerColor = backgroundScreenColor(), topBar = { LargeTopAppBar(title = { Text(if (initial == null) "添加课程" else "编辑课程") }, scrollBehavior = scrollBehavior,
         navigationIcon = { IconButton(onClick = onClose) { Icon(Icons.Default.Close, "关闭") } },
-        actions = { TextButton(onClick = ::save, enabled = !busy) { Text("保存") } }) }) { padding ->
+        actions = { Button(shapes = ButtonDefaults.shapes(), onClick = ::save, enabled = !busy, modifier = Modifier.padding(end = 12.dp)) { Text("保存") } }) }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(course.name, { course = course.copy(name = it); invalid = false }, label = { Text("课程名") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth(), isError = invalid, supportingText = if (invalid) { { Text("请填写课程名") } } else null)
@@ -49,9 +57,10 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
                 OutlinedTextField(course.classroom, { course = course.copy(classroom = it) }, label = { Text("教室") }, modifier = Modifier.weight(1f), singleLine = true)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                (CoursePalettes.find(data.schedule.colorPalette) ?: CoursePalettes.all.first()).colors.forEach { hex ->
-                    Box(Modifier.size(40.dp).background(Color(android.graphics.Color.parseColor(hex)), CircleShape)
+                (CoursePalettes.find(data.schedule.colorPalette) ?: CoursePalettes.all.first()).colors.forEachIndexed { index, hex ->
+                    Box(Modifier.size(48.dp).clip(CircleShape).background(Color(android.graphics.Color.parseColor(hex)), CircleShape)
                         .border(if (course.color == hex) 3.dp else 0.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                        .semantics { contentDescription = "课程颜色 ${index + 1}"; selected = course.color == hex }
                         .clickable { course = course.copy(color = hex) }, contentAlignment = Alignment.Center) {
                         if (course.color == hex) Icon(Icons.Default.Check, "已选颜色", tint = Color(0xFF24463F))
                     }
@@ -63,14 +72,14 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
                     color = backgroundPanelColor(MaterialTheme.colorScheme.surfaceContainerLow), modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("周${WEEKDAYS[period.dayOfWeek - 1]} · ${period.startSection}–${period.endSection} 节", style = MaterialTheme.typography.titleMedium)
-                            Text(periodWeeks(period, course.classroom), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("周${WEEKDAYS[period.dayOfWeek - 1]}，${period.startSection}–${period.endSection} 节", style = MaterialTheme.typography.titleMedium)
+                            Text(periodWeeks(period, course.classroom, course.teacher), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "编辑上课时间 ${index + 1}", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
-            TextButton(onClick = { periods.add(defaultPeriod()); addedPeriod = true; editingPeriod = periods.lastIndex }) {
+            FilledTonalButton(shapes = ButtonDefaults.shapes(), onClick = { periods.add(defaultPeriod()); addedPeriod = true; editingPeriod = periods.lastIndex }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Icon(Icons.Default.Add, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("添加时间")
             }
             OutlinedTextField(course.note, { course = course.copy(note = it) }, label = { Text("备注") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
@@ -79,12 +88,12 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
         }
     }
     editingPeriod?.let { index ->
-        PeriodSheet(periods[index], slots, data.schedule.maxWeeks, data.schedule.fixedLessonMinutes, course.classroom,
+        PeriodSheet(periods[index], slots, data.schedule.maxWeeks, course.teacher, course.classroom,
             canDelete = periods.size > 1,
             onDismiss = { if (addedPeriod) periods.removeAt(index); addedPeriod = false; editingPeriod = null },
-            onDelete = { periods.removeAt(index); addedPeriod = false; editingPeriod = null }) { period, updatedSlots ->
-            periods[index] = period
-            slots = updatedSlots
+            onDelete = { periods.removeAt(index); addedPeriod = false; editingPeriod = null }) { updatedPeriods ->
+            periods.removeAt(index)
+            periods.addAll(index, updatedPeriods)
             addedPeriod = false
             editingPeriod = null
         }
@@ -95,9 +104,10 @@ fun CourseEditor(data: ScheduleData, initial: CourseWithPeriods?, busy: Boolean,
         dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("取消") } })
 }
 
-/** "第 3–18 周 · 单周 · 实验楼 101" — the room only when it differs from the course room. */
-internal fun periodWeeks(period: CoursePeriod, courseRoom: String): String = listOfNotNull(
+/** "第 3–18 周，单周，实验楼 101" — the room only when it differs from the course room. */
+internal fun periodWeeks(period: CoursePeriod, courseRoom: String, courseTeacher: String = ""): String = listOfNotNull(
     "第 ${period.startWeek}–${period.endWeek} 周",
     WEEK_TYPES[period.weekType.ordinal].takeIf { period.weekType != WeekType.ALL },
+    period.teacher.takeIf { it.isNotBlank() && it != courseTeacher },
     period.classroom.takeIf { it.isNotBlank() && it != courseRoom },
-).joinToString(" · ")
+).joinToString("，")
